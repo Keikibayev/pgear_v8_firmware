@@ -1,0 +1,94 @@
+// ============================================================================
+// constants.h — firmware-mirror constants (port of pi_gui constants.py)
+// Single source of truth for mechanical scaling, CAN protocol, ODrive enums,
+// node ids, and the joint table. Reconciled against v7.1.5 / pos_only firmware.
+// ============================================================================
+#pragma once
+#include <stdint.h>
+#include <math.h>
+#include "protocol.h"   // PG_NJOINTS
+
+// ---- Mechanical scaling (pos_only.ino:131-135) -----------------------------
+static constexpr float GEAR_RATIO   = 64.0f;
+static constexpr float KEF          = 1.5f;
+static constexpr float TURNS_PER_DEG = GEAR_RATIO * KEF / 360.0f;  // ~0.2667
+static constexpr float DEG_PER_TURN  = 1.0f / TURNS_PER_DEG;       // 3.75
+static inline float deg_to_turns(float d) { return d * TURNS_PER_DEG; }
+static inline float turns_to_deg(float t) { return t / TURNS_PER_DEG; }
+
+// ---- CAN bus ---------------------------------------------------------------
+static constexpr uint32_t CAN_BITRATE   = 250000;   // 250 kbps (TWAI_TIMING_CONFIG_250KBITS)
+static constexpr int      CAN_CMD_BITS  = 5;        // id = (node<<5)|cmd
+static constexpr int      CAN_CMD_MASK  = 0x1F;
+
+// ⚠ PIN CONFLICT: v7.1.5 wired the CAN transceiver to GPIO 19/20 — but those
+// are the ESP32-S3 NATIVE-USB (D-/D+) pins. If CAN truly uses 19/20 on the
+// 7" board, the PC link CANNOT be native USB-CDC; use the board's UART-bridge
+// USB-C (CH343) instead. VERIFY the ESP32-S3-Touch-LCD-7 schematic before trust.
+#ifndef CAN_RX_PIN
+#define CAN_RX_PIN 19
+#endif
+#ifndef CAN_TX_PIN
+#define CAN_TX_PIN 20
+#endif
+
+static constexpr float    ODRIVE_WD_TIMEOUT_S = 0.5f;
+static constexpr float    ODRIVE_WD_FEED_HZ   = 10.0f;
+
+// ---- ODrive CAN command IDs (subset we use) --------------------------------
+enum CanCmd : uint8_t {
+  CMD_HEARTBEAT        = 0x001,  // RX: axis_error u32, axis_state u8
+  CMD_MOTOR_ERROR      = 0x003,  // RX: error u32
+  CMD_ENC_ERROR        = 0x004,  // RX: error u32
+  CMD_SET_AXIS_STATE   = 0x007,  // TX: state u32
+  CMD_GET_ENC_EST      = 0x009,  // RX: pos f32, vel f32
+  CMD_SET_CTRL_MODES   = 0x00B,  // TX: control_mode u32, input_mode u32
+  CMD_SET_INPUT_POS    = 0x00C,  // TX: pos f32, vel_ff i16, torque_ff i16
+  CMD_SET_INPUT_TORQUE = 0x00E,  // TX: torque f32
+  CMD_SET_LIMITS       = 0x00F,  // TX: vel_lim f32, cur_lim f32
+  CMD_SET_TRAJ_VEL     = 0x011,  // TX: traj_vel f32
+  CMD_SET_TRAJ_ACCEL   = 0x012,  // TX: accel f32, decel f32
+  CMD_GET_IQ           = 0x014,  // RX: iq_setpoint f32, iq_measured f32
+  CMD_CLEAR_ERRORS     = 0x018,  // TX: (empty)
+  CMD_CONTROLLER_ERR   = 0x01D,  // RX: error u32
+};
+
+// ---- ODrive enums ----------------------------------------------------------
+enum AxisState : uint32_t { AXIS_IDLE = 1, AXIS_FULL_CAL = 3, AXIS_CLOSED_LOOP = 8 };
+enum ControlMode : uint32_t { CM_TORQUE = 1, CM_VELOCITY = 2, CM_POSITION = 3 };
+enum InputMode : uint32_t { IM_PASSTHROUGH = 1, IM_POS_FILTER = 3, IM_TRAP_TRAJ = 5 };
+
+// ---- Joint table (canonical order: 0=R-hip,1=R-knee,2=L-hip,3=L-knee) ------
+enum JointKind : uint8_t { KIND_HIP = 0, KIND_KNEE = 1 };
+struct JointDef { uint8_t node_id; JointKind kind; const char* shortName; int8_t default_dir; };
+
+// node ids: R-hip=10, R-knee=11, L-hip=2, L-knee=3 (v7.1.5.ino:77-80)
+static constexpr JointDef JOINTS[PG_NJOINTS] = {
+  { 10, KIND_HIP,  "HR", -1 },
+  { 11, KIND_KNEE, "KR", -1 },
+  {  2, KIND_HIP,  "HL", +1 },
+  {  3, KIND_KNEE, "KL", +1 },
+};
+
+// reverse-lookup joint index by CAN node id; -1 if not ours.
+static inline int joint_for_node(uint8_t node_id) {
+  for (int i = 0; i < PG_NJOINTS; i++)
+    if (JOINTS[i].node_id == node_id) return i;
+  return -1;
+}
+
+// ---- Safety envelopes (motor turns) ----------------------------------------
+static constexpr float HIP_TURN_MIN = -6.0f, HIP_TURN_MAX = 8.0f;
+static constexpr float KNEE_TURN_MIN = -2.0f, KNEE_TURN_MAX = 10.0f;
+static constexpr float ABS_VEL_LIM = 25.0f, ABS_ACC_LIM = 200.0f, ABS_CUR_LIM = 20.0f;
+static constexpr float MAX_HIP_TORQUE_NM = 3.0f, MAX_KNEE_TORQUE_NM = 2.5f;
+
+// ---- iq -> joint torque ----------------------------------------------------
+static constexpr float HR_TORQUE_CONSTANT_NM_A = 0.119f;
+static constexpr float GEAR_EFFICIENCY = 0.70f;
+static constexpr float JOINT_NM_PER_A =
+    HR_TORQUE_CONSTANT_NM_A * GEAR_RATIO * KEF * GEAR_EFFICIENCY;
+
+// ---- Loop rates ------------------------------------------------------------
+static constexpr uint32_t TELEM_HZ = 100;
+static constexpr uint32_t GAIT_STEP_HZ = 50;

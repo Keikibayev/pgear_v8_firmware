@@ -14,6 +14,8 @@
 //   P5 safety.h       P6 control.h + calib.h  P8 status_screen.h
 // ============================================================================
 #include "protocol.h"
+#include "constants.h"
+#include "can_odrive.h"     // [Phase 1] TWAI + ODrive protocol
 
 // ---- Control task configuration --------------------------------------------
 static const uint32_t CTRL_HZ        = 250;                 // real-time loop rate
@@ -61,7 +63,11 @@ void setup() {
                 (unsigned)sizeof(LogPacket), (unsigned)PG_CMD_MAXPAYLOAD);
 
   // --- TODO P0: status_screen_init();  (panel bring-up, NO LVGL — text only)
-  // --- TODO P1: can_odrive_init();     (TWAI 250 kbps; reuse waveshare_twai_port)
+  if (can_odrive_init()) {
+    can_idle_all();                  // safe default: every axis IDLE at boot
+  } else {
+    Serial.println("[pgear_v8] WARNING: CAN init failed — check transceiver/pins");
+  }
   // --- TODO P3: coproc_link_init();    (UART @ PG_COPROC_UART_BAUD)
   // --- TODO P4: host_link_init();      (USB-CDC command parser; WiFi-UDP log)
 
@@ -75,6 +81,7 @@ void setup() {
 // ============================================================================
 void loop() {
   static uint32_t lastStatus = 0;
+  static uint32_t lastWdFeed = 0;
   uint32_t now = millis();
 
   // Phase-0 USB-CDC echo so we can confirm the PC link end to end.
@@ -84,12 +91,26 @@ void loop() {
   }
   // --- TODO P4: parse CommandPacket frames from Serial here.
 
+  // ODrive watchdog feed @ ~10 Hz (re-asserts known axis state).
+  if (now - lastWdFeed >= (uint32_t)(1000.0f / ODRIVE_WD_FEED_HZ)) {
+    lastWdFeed = now;
+    can_feed_watchdog();
+  }
+
   if (now - lastStatus >= 500) {
     lastStatus = now;
+    BusTelemetry snap;
+    can_snapshot(&snap);
     // --- TODO P8: render this to the on-device text status screen too.
-    Serial.printf("[status] t=%lu ms  ticks=%lu  loop=%u us  estop=%d\n",
+    Serial.printf("[status] t=%lu  ticks=%lu  loop=%u us  estop=%d  bus=%d\n",
                   (unsigned long)now, (unsigned long)g_ctrlTicks,
-                  (unsigned)g_ctrlLoopUs, (int)g_estop);
+                  (unsigned)g_ctrlLoopUs, (int)g_estop, (int)snap.bus_up);
+    for (int i = 0; i < PG_NJOINTS; i++) {
+      const AxisTelemetry& a = snap.j[i];
+      Serial.printf("   %s n%u st=%u pos=%.2f vel=%.2f iq=%.2f fb=%d\n",
+                    JOINTS[i].shortName, JOINTS[i].node_id, a.axis_state,
+                    a.pos_turns, a.vel_turns_s, a.iq_measured_a, (int)a.fb_valid);
+    }
     // --- TODO P3/P4: build + emit LogPacket over USB-CDC and WiFi-UDP.
   }
 }
