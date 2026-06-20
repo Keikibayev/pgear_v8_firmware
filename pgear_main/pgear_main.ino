@@ -18,6 +18,13 @@
 #include "board_io.h"       // CH422G: route GPIO19/20 to CAN (not native USB)
 #include "can_odrive.h"     // [Phase 1] TWAI + ODrive protocol
 #include "gait_engine.h"    // [Phase 2] gait state machine + setpoints
+#include "coproc_link.h"    // [Phase 3] ADS1256 coproc over UART
+
+// Coproc UART (43/44) shares pins with the CH343P text console via the board's
+// UART switch — they can't both run. Set USE_COPROC=1 once the coproc is wired
+// (switch on UART2) and debug moves to WiFi (Phase 4). Keep 0 for the Phase-2
+// serial-console bench-key workflow.
+#define USE_COPROC 0
 
 // ---- Control task configuration --------------------------------------------
 static const uint32_t CTRL_HZ        = 250;                 // real-time loop rate
@@ -160,7 +167,9 @@ void setup() {
     Serial.println("[pgear_v8] WARNING: CAN init failed — check transceiver/pins");
   }
   g_engine.init_defaults();          // [Phase 2] ROM/dir/init-pose per joint
-  // --- TODO P3: coproc_link_init();    (UART @ PG_COPROC_UART_BAUD)
+#if USE_COPROC
+  coproc_link_init();                // [Phase 3] ADS1256 coproc on UART2 (43/44)
+#endif
   // --- TODO P4: host_link_init();      (WiFi STA join hotspot; UDP telem + TCP cmds)
 
   xTaskCreatePinnedToCore(controlTask, "control", 8192, nullptr,
@@ -196,7 +205,14 @@ void loop() {
   if (now - lastWdFeed >= (uint32_t)(1000.0f / ODRIVE_WD_FEED_HZ)) {
     lastWdFeed = now;
     can_feed_watchdog();
+#if USE_COPROC
+    coproc_send_downstream(0, g_estop);   // keep coproc fed: estop + tareSeq
+#endif
   }
+
+#if USE_COPROC
+  coproc_link_poll();                      // parse coproc RX (comms core)
+#endif
 
   if (now - lastStatus >= 500) {
     lastStatus = now;
@@ -209,12 +225,24 @@ void loop() {
                   (unsigned)g_ctrlLoopUs, (int)g_estop, (int)snap.bus_up,
                   (int)g_armed, (int)g_running, (unsigned)g_engine.phase,
                   g_engine.phase01);
+#if USE_COPROC
+    CoprocData cd; coproc_get(&cd);
+    Serial.printf("   coproc online=%d age=%lu ms\n", (int)cd.online,
+                  (unsigned long)cd.ageMs);
+#endif
     for (int i = 0; i < PG_NJOINTS; i++) {
       const AxisTelemetry& a = snap.j[i];
+#if USE_COPROC
+      Serial.printf("   %s n%u st=%u pos=%.2f vel=%.2f iq=%.2f tau=%.2f fb=%d\n",
+                    JOINTS[i].shortName, JOINTS[i].node_id, a.axis_state,
+                    a.pos_turns, a.vel_turns_s, a.iq_measured_a, cd.torqueNm[i],
+                    (int)a.fb_valid);
+#else
       Serial.printf("   %s n%u st=%u pos=%.2f vel=%.2f iq=%.2f fb=%d\n",
                     JOINTS[i].shortName, JOINTS[i].node_id, a.axis_state,
                     a.pos_turns, a.vel_turns_s, a.iq_measured_a, (int)a.fb_valid);
+#endif
     }
-    // --- TODO P3/P4: build + emit LogPacket over USB-CDC and WiFi-UDP.
+    // --- TODO P4: build + emit LogPacket over WiFi-UDP; TCP commands.
   }
 }

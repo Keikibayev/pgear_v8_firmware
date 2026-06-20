@@ -86,6 +86,14 @@ static constexpr float KNEE_TURN_MIN = -2.0f, KNEE_TURN_MAX = 10.0f;
 static constexpr float ABS_VEL_LIM = 25.0f, ABS_ACC_LIM = 200.0f, ABS_CUR_LIM = 20.0f;
 static constexpr float MAX_HIP_TORQUE_NM = 3.0f, MAX_KNEE_TORQUE_NM = 2.5f;
 
+// ---- FUTEK force -> joint torque (moment arm, applied on the MAIN side) -----
+// Coproc sends calibrated N per cell; main multiplies by the moment arm to get
+// joint torque. Order HR/KR/HL/KL. Tune to the mechanical mounting.
+static constexpr float MOMENT_ARM_M[PG_NJOINTS] = { 0.15f, 0.12f, 0.15f, 0.12f };
+
+// Coproc link timeout: no valid SensorPacket for this long -> sensors offline.
+static constexpr uint32_t COPROC_LINK_TIMEOUT_MS = 300;
+
 // ---- iq -> joint torque ----------------------------------------------------
 static constexpr float HR_TORQUE_CONSTANT_NM_A = 0.119f;
 static constexpr float GEAR_EFFICIENCY = 0.70f;
