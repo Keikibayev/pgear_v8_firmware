@@ -1,0 +1,16 @@
+# Arduino / ESP32 build artifacts
+build/
+*.bin
+*.elf
+*.map
+*.hex
+.cache/
+
+# IDE
+.vscode/
+.DS_Store
+
+# ESP-IDF (if a component build is ever added)
+sdkconfig.old
+managed_components/
+dependencies.lock
