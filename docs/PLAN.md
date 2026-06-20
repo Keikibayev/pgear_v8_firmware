@@ -41,7 +41,7 @@ coefficients via `OP_LOAD_COEFFS` (`JointCoeffs`). ESP32 only evaluates
 | **2** 🔨 | `gait` + `gait_engine` ports + control-task integration + temp serial bench keys (a/r/s/d/e) | smooth motion, no jitter — bench-verify pending |
 | **3** 🔨 | ADS1256 coproc firmware + `coproc_link` (UART2/43/44) + force→torque fusion; wiring doc | torque sensing — bench-verify pending (`LogPacket` emit moves to P4/WiFi) |
 | **4** 🔨 | Firmware host link done: WiFi STA, UDP LogPacket telemetry, TCP CommandPacket server + dispatch, link-loss watchdog, calib coeff store/predict. **pi_gui supervisor adaptation (strip loop, send cmds/decode telem) still TODO** | host = pure pendant — bench-verify pending |
-| **5** | safety supervisor (estop, watchdog, ROM enforce, sensor rate-cap/glitch, drift) | safe to strap a patient |
+| **5** 🔨 | safety supervisor: HW e-stop GPIO, hb watchdog, **motor-turn envelope clamp (sole hard ROM limit — NO endstops)**, sensor rate/glitch, iq-vs-FUTEK cross-check | safe to strap a patient — bench-verify pending |
 | **6** | position-mode AAN + trim + passive-model eval | assist-as-needed on-chip |
 | **6b** | torque-mode impedance law (`TorqueGaitController`) | compliant mode |
 | **7** | Jog / Teach-ROM / Observe modes | setup workflows |
@@ -73,6 +73,13 @@ console (CH343P port), press `a` (arm → closed-loop POS_FILTER), then `r`
 software e-stop (hardware e-stop comes in Phase 5). Watch the status line:
 `ph` should go IDLE→INIT(1)→GAIT(2), `p01` cycling 0..1. Confirm the legs walk
 smoothly with no jerk at the GAIT→HOMING transition.
+
+## NO ODrive endstops (2026-06-20)
+This build has **no physical endstops**. The firmware **motor-turn envelope
+clamp** (`safety_clamp_turns`) is the ONLY hard ROM limit — every commanded
+position is clamped to HIP −6..+8 / KNEE −2..+10 turns before TX. The E-STOP is
+a hardware button (GPIO sense + a HW motor-power cutoff independent of the MCU).
+Verify the envelope matches the mechanical stops before any patient session.
 
 ## Open hardware items
 - Verify **ESP32-S3-Touch-LCD-7** GPIO map (v7.1.5 config was the 4.3" variant).

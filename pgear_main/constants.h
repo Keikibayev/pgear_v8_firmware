@@ -121,6 +121,18 @@ static constexpr uint32_t HOMING_RAMP_MS    = 1500;
 // canonical order guarantees idx 0,1 = Right leg; 2,3 = Left leg
 static inline bool joint_is_left(int idx) { return idx >= 2; }
 
+// ---- Safety ----------------------------------------------------------------
+// NO physical ODrive endstops in this setup -> the firmware motor-turn envelope
+// clamp (HIP/KNEE_TURN_MIN/MAX above) is the ONLY hard ROM limit. Every
+// commanded position is clamped to it before TX, regardless of the soft deg ROM.
+#ifndef ESTOP_GPIO
+#define ESTOP_GPIO 6        // <-- VERIFY a free broken-out GPIO; NC button to GND
+#endif
+#define ESTOP_ACTIVE_LOW 1  // INPUT_PULLUP; pressed (open NC) reads HIGH=released
+static constexpr float SENSOR_MAX_RATE_NM_PER_S   = 20.0f;  // glitch if exceeded
+static constexpr int   SENSOR_GLITCH_ESTOP_PER_S  = 50;     // glitches/s -> e-stop
+static constexpr float CROSSCHECK_DIVERGE_NM      = 8.0f;   // iq vs FUTEK warn
+
 // ---- Loop rates ------------------------------------------------------------
 static constexpr uint32_t TELEM_HZ = 100;
 static constexpr uint32_t GAIT_STEP_HZ = 50;

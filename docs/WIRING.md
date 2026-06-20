@@ -101,13 +101,22 @@ PC and the Main ESP32-S3 both join your **external hotspot** (station mode).
 Telemetry = UDP; commands = reliable channel; link-loss watchdog on the ESP32.
 (Phase 4.)
 
-## 6. Safety wiring (Phase 5 — wire the harness now)
+## 6. Safety wiring (Phase 5)
 
-- **E-STOP button** (NC) → a Main ESP32 GPIO to GND (latched estop in firmware)
-  **and**, for hard safety, into the ODrive enable / a contactor on motor power.
-- **Physical endstops** per axis → ODrive GPIO (min/max), as the ultimate ROM
-  limit independent of the soft deg-frame ROM.
+**No physical endstops in this setup.** The firmware **motor-turn envelope
+clamp** (`safety_clamp_turns`, HIP −6..+8 / KNEE −2..+10 turns) is therefore the
+**only** hard ROM limit — every commanded position is clamped to it before TX.
+
+- **E-STOP button (NC):**
+  1. → a Main ESP32 GPIO to GND (`ESTOP_GPIO`, default 6 — **verify a free
+     pin**), `INPUT_PULLUP`; firmware latches e-stop and idles all axes.
+  2. **AND** a hardware path that cuts motor power **without firmware** — wire
+     the same button into a **contactor / the ODrive power rail** so an e-stop
+     works even if the MCU hangs. This is the real emergency stop; the GPIO is
+     the firmware's awareness of it.
 - Do **not** rely on a WiFi command for emergency stop.
+- Because there are no endstops, double-check the envelope constants match the
+  mechanical hard stops before running with a patient.
 
 ---
 

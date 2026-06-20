@@ -21,6 +21,7 @@
 #include "coproc_link.h"    // [Phase 3] ADS1256 coproc over UART
 #include "calib.h"          // [Phase 4] downloaded model store + predict
 #include "host_link.h"      // [Phase 4] WiFi: UDP telemetry + TCP commands
+#include "safety.h"         // [Phase 5] e-stop, hb watchdog, envelope clamp, sensor wd
 #include "wifi_config.h"    // HOST_TELEM_HZ
 #include <string.h>
 
@@ -56,6 +57,8 @@ volatile uint8_t g_controlMode = MODE_POSITION;
 volatile bool    g_aanEnabled  = false;
 volatile float   g_assistLevel = 0.5f;
 volatile uint16_t g_logSeq     = 0;
+volatile uint8_t g_crossCheckFault = 0;
+volatile uint8_t g_hbErrorByte     = 0;
 
 static GaitEngine g_engine;
 
@@ -149,6 +152,8 @@ static void build_logpacket(LogPacket* p) {
   p->ampR = g_engine.amp_r; p->ampL = g_engine.amp_l;
   p->assistR = g_assistLevel; p->assistL = g_assistLevel;
   p->ctrlLoopUs = g_ctrlLoopUs;
+  p->crossCheckFault = g_crossCheckFault;
+  p->hbErrorByte = g_hbErrorByte;
 
   p->crc = pg_crc16_ccitt((const uint8_t*)p, sizeof(LogPacket) - 2);
 }
@@ -213,8 +218,16 @@ static void controlTask(void *arg) {
     for (int i = 0; i < PG_NJOINTS; i++)
       g_engine.update_pos(i, snap.j[i].pos_turns);
 
-    // --- TODO P3: fold in coproc force -> torque
-    // --- TODO P5: safety (estop / watchdog / ROM enforce / cross-check)
+    // Safety supervisor (e-stop button, hb watchdog, sensor watchdog, cross-check).
+    CoprocData cd;
+#if USE_COPROC
+    coproc_get(&cd);
+#endif
+    uint8_t cc = 0, hb = 0;
+    bool trip = safety_tick(g_armed, g_running, &snap, &cd, &cc, &hb);
+    g_crossCheckFault = cc; g_hbErrorByte = hb;
+    if (trip && !g_estop) doEstop();
+
     // --- TODO P6: control.step()  (pos-mode AAN  OR  torque-mode impedance)
 
     // Gait setpoint output at GAIT_STEP_HZ (every GAIT_SUBDIV ticks).
@@ -225,7 +238,8 @@ static void controlTask(void *arg) {
         g_engine.tick(GAIT_DT_S, turns, has);
         if (g_armed) {
           for (int i = 0; i < PG_NJOINTS; i++)
-            if (has[i]) can_set_input_pos(i, turns[i]);
+            if (has[i])
+              can_set_input_pos(i, safety_clamp_turns(i, turns[i]));  // envelope = sole hard limit
         }
         // STOP sequence finished -> settle to IDLE.
         if (g_engine.phase == PH_HOMING &&
@@ -264,6 +278,7 @@ void setup() {
     Serial.println("[pgear_v8] WARNING: CAN init failed — check transceiver/pins");
   }
   g_engine.init_defaults();          // [Phase 2] ROM/dir/init-pose per joint
+  safety_init();                     // [Phase 5] e-stop GPIO + watchdogs
 #if USE_COPROC
   coproc_link_init();                // [Phase 3] ADS1256 coproc on UART2 (43/44)
 #endif
