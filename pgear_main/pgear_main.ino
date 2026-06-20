@@ -17,35 +17,121 @@
 #include "constants.h"
 #include "board_io.h"       // CH422G: route GPIO19/20 to CAN (not native USB)
 #include "can_odrive.h"     // [Phase 1] TWAI + ODrive protocol
+#include "gait_engine.h"    // [Phase 2] gait state machine + setpoints
 
 // ---- Control task configuration --------------------------------------------
 static const uint32_t CTRL_HZ        = 250;                 // real-time loop rate
 static const uint32_t CTRL_PERIOD_US = 1000000UL / CTRL_HZ; // 4000 us
 static const BaseType_t CTRL_CORE    = 1;                   // pin control to core 1
 static const BaseType_t COMMS_CORE   = 0;                   // loop() runs on core 0
+static const int      GAIT_SUBDIV    = CTRL_HZ / GAIT_STEP_HZ;   // 250/50 = 5
+static const float    GAIT_DT_S      = 1.0f / (float)GAIT_STEP_HZ;
 
 // ---- Shared state (cross-core; expand into proper structs in later phases) --
 volatile uint32_t g_ctrlTicks   = 0;
 volatile uint16_t g_ctrlLoopUs  = 0;   // last control-loop exec time (-> LogPacket)
 volatile bool     g_estop       = false;
+volatile bool     g_armed       = false;
+volatile bool     g_running     = false;
+
+// Pending operator command (set from comms core, consumed by control core so
+// all CAN TX stays on one core). TEMP bench control — replaced by CommandPacket
+// in Phase 4.
+enum PgCmd { CMD_NONE = 0, CMD_ARM, CMD_RUN, CMD_STOP, CMD_DISARM, CMD_ESTOP };
+volatile PgCmd g_pendingCmd = CMD_NONE;
+
+static GaitEngine g_engine;
+
+// ---- run-state orchestration (executed on the control core) ----------------
+static void armDrives() {
+  for (int i = 0; i < PG_NJOINTS; i++) {
+    if (!g_engine.joints[i].enabled) continue;
+    can_clear_errors(i);
+    can_set_control_mode(i, CM_POSITION, IM_POS_FILTER);  // bandwidth provisioned
+    can_set_limits(i, ABS_VEL_LIM, 10.0f);                // bench-safe current cap
+    can_set_axis_state(i, AXIS_CLOSED_LOOP);
+  }
+  g_armed = true;
+  Serial.println("[ctrl] ARMED (closed-loop, POS_FILTER)");
+}
+
+static void disarmDrives() {
+  g_running = false;
+  g_engine.go_idle();
+  can_idle_all();
+  g_armed = false;
+  Serial.println("[ctrl] DISARMED");
+}
+
+static void doEstop() {
+  g_running = false;
+  g_engine.go_idle();
+  can_idle_all();
+  g_armed = false;
+  g_estop = true;
+  Serial.println("[ctrl] *** E-STOP *** (all axes IDLE)");
+}
+
+static void handlePendingCmd() {
+  PgCmd c = g_pendingCmd;
+  if (c == CMD_NONE) return;
+  g_pendingCmd = CMD_NONE;
+  switch (c) {
+    case CMD_ARM:    if (!g_estop) armDrives(); break;
+    case CMD_RUN:    if (g_armed) { g_engine.start_gait(); g_running = true;
+                                    Serial.println("[ctrl] RUN (gait)"); } break;
+    case CMD_STOP:   if (g_running) { g_engine.start_homing();
+                                      Serial.println("[ctrl] STOP -> homing"); } break;
+    case CMD_DISARM: disarmDrives(); break;
+    case CMD_ESTOP:  doEstop(); break;
+    default: break;
+  }
+}
 
 // ============================================================================
 // Real-time control task — pinned to core 1, runs at CTRL_HZ with low jitter.
-// This is where the gait engine + control law + CAN TX will live (P1, P2, P6).
+// Phase 2: position-mode gait. (Coproc fusion P3, safety P5, AAN/torque P6.)
 // ============================================================================
 static void controlTask(void *arg) {
   (void)arg;
   TickType_t lastWake = xTaskGetTickCount();
   const TickType_t period = pdMS_TO_TICKS(1000 / CTRL_HZ);
+  int subdiv = 0;
 
   for (;;) {
     uint32_t t0 = micros();
 
-    // --- TODO P1: poll CAN/ODrive telemetry snapshot
+    handlePendingCmd();
+
+    // Telemetry snapshot -> feed measured positions into the engine.
+    BusTelemetry snap;
+    can_snapshot(&snap);
+    for (int i = 0; i < PG_NJOINTS; i++)
+      g_engine.update_pos(i, snap.j[i].pos_turns);
+
     // --- TODO P3: fold in coproc force -> torque
     // --- TODO P5: safety (estop / watchdog / ROM enforce / cross-check)
-    // --- TODO P6: control.step()  (position-mode AAN  OR  torque-mode impedance)
-    // --- TODO P1: push setpoints over CAN
+    // --- TODO P6: control.step()  (pos-mode AAN  OR  torque-mode impedance)
+
+    // Gait setpoint output at GAIT_STEP_HZ (every GAIT_SUBDIV ticks).
+    if (++subdiv >= GAIT_SUBDIV) {
+      subdiv = 0;
+      if (g_running) {
+        float turns[PG_NJOINTS]; bool has[PG_NJOINTS];
+        g_engine.tick(GAIT_DT_S, turns, has);
+        if (g_armed) {
+          for (int i = 0; i < PG_NJOINTS; i++)
+            if (has[i]) can_set_input_pos(i, turns[i]);
+        }
+        // STOP sequence finished -> settle to IDLE.
+        if (g_engine.phase == PH_HOMING &&
+            (g_engine.all_home_arrived() || g_engine.homing_timed_out())) {
+          g_engine.go_idle();
+          g_running = false;
+          Serial.println("[ctrl] homing done -> IDLE");
+        }
+      }
+    }
     g_ctrlTicks++;
 
     g_ctrlLoopUs = (uint16_t)(micros() - t0);
@@ -73,12 +159,14 @@ void setup() {
   } else {
     Serial.println("[pgear_v8] WARNING: CAN init failed — check transceiver/pins");
   }
+  g_engine.init_defaults();          // [Phase 2] ROM/dir/init-pose per joint
   // --- TODO P3: coproc_link_init();    (UART @ PG_COPROC_UART_BAUD)
-  // --- TODO P4: host_link_init();      (USB-CDC command parser; WiFi-UDP log)
+  // --- TODO P4: host_link_init();      (WiFi STA join hotspot; UDP telem + TCP cmds)
 
   xTaskCreatePinnedToCore(controlTask, "control", 8192, nullptr,
                           configMAX_PRIORITIES - 2, nullptr, CTRL_CORE);
   Serial.println("[pgear_v8] control task started");
+  Serial.println("[pgear_v8] bench keys: a=arm r=run s=stop d=disarm e=estop");
 }
 
 // ============================================================================
@@ -89,12 +177,20 @@ void loop() {
   static uint32_t lastWdFeed = 0;
   uint32_t now = millis();
 
-  // Phase-0 USB-CDC echo so we can confirm the PC link end to end.
+  // TEMP bench control over the serial console (replaced by CommandPacket /
+  // WiFi in Phase 4). One key per action; consumed on the control core.
   while (Serial.available()) {
     int c = Serial.read();
-    Serial.write((uint8_t)c);
+    switch (c) {
+      case 'a': g_pendingCmd = CMD_ARM;    break;
+      case 'r': g_pendingCmd = CMD_RUN;    break;
+      case 's': g_pendingCmd = CMD_STOP;   break;
+      case 'd': g_pendingCmd = CMD_DISARM; break;
+      case 'e': g_pendingCmd = CMD_ESTOP;  break;
+      case 'E': g_estop = false; Serial.println("[ctrl] estop cleared"); break;
+      default: break;
+    }
   }
-  // --- TODO P4: parse CommandPacket frames from Serial here.
 
   // ODrive watchdog feed @ ~10 Hz (re-asserts known axis state).
   if (now - lastWdFeed >= (uint32_t)(1000.0f / ODRIVE_WD_FEED_HZ)) {
@@ -107,9 +203,12 @@ void loop() {
     BusTelemetry snap;
     can_snapshot(&snap);
     // --- TODO P8: render this to the on-device text status screen too.
-    Serial.printf("[status] t=%lu  ticks=%lu  loop=%u us  estop=%d  bus=%d\n",
+    Serial.printf("[status] t=%lu ticks=%lu loop=%u us estop=%d bus=%d "
+                  "armed=%d run=%d ph=%u p01=%.2f\n",
                   (unsigned long)now, (unsigned long)g_ctrlTicks,
-                  (unsigned)g_ctrlLoopUs, (int)g_estop, (int)snap.bus_up);
+                  (unsigned)g_ctrlLoopUs, (int)g_estop, (int)snap.bus_up,
+                  (int)g_armed, (int)g_running, (unsigned)g_engine.phase,
+                  g_engine.phase01);
     for (int i = 0; i < PG_NJOINTS; i++) {
       const AxisTelemetry& a = snap.j[i];
       Serial.printf("   %s n%u st=%u pos=%.2f vel=%.2f iq=%.2f fb=%d\n",

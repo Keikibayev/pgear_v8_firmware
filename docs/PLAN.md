@@ -38,7 +38,7 @@ coefficients via `OP_LOAD_COEFFS` (`JointCoeffs`). ESP32 only evaluates
 |---|---|---|
 | **0** ✅ | repo skeleton; headless bring-up; dual-core; USB-CDC echo; `protocol.h` | toolchain + board |
 | **1** 🔨 | `can_odrive.cpp` TWAI port (RX task core 0, TX, watchdog, snapshot) + standalone `pgear_smoke_can` test | **deterministic CAN** — bench-verify pending |
-| **2** | `gait` + `gait_engine` → empty exo through gait in pos mode | smooth motion, no jitter |
+| **2** 🔨 | `gait` + `gait_engine` ports + control-task integration + temp serial bench keys (a/r/s/d/e) | smooth motion, no jitter — bench-verify pending |
 | **3** | ADS1256 coproc + UART link + fusion; `LogPacket` out (USB+UDP) | torque sensing + logger |
 | **4** | PC supervisor: strip control loop from pi_gui; `CommandPacket`; profiles → coeffs | host = pure pendant |
 | **5** | safety supervisor (estop, watchdog, ROM enforce, sensor rate-cap/glitch, drift) | safe to strap a patient |
@@ -55,6 +55,24 @@ board has a **2nd USB-C port** = "USB TO UART" via a **CH343P** bridge (UART0,
 GPIO43/44), independent of GPIO19/20. **Decision:** keep CAN on 19/20
 (EXIO5=HIGH, set in `board_io.cpp`); the PC link + flashing use the CH343P
 port. Arduino: set **USB CDC On Boot: DISABLED** so `Serial` = that port.
+
+## Host link — DECIDED (2026-06-20)
+PC link over **WiFi, station mode** — the ESP32-S3 (and the PC) join an
+**external hotspot** the user provides. Coproc takes the UART2 pins (43/44),
+so there is no wired-USB PC link in normal operation (USB only for flashing).
+Phase 4 host link: **UDP** for telemetry/logging (loss-tolerant `LogPacket`)
++ a **reliable channel (TCP or UDP+ACK)** for commands + a **link-loss
+watchdog** (PC heartbeat gone ~1 s → ESP32 auto-ramps to safe hold). Safety
+note: real E-STOP + limits are HARDWARE (button + ODrive GPIO endstops), never
+dependent on WiFi.
+
+## Bench-verify Phase 2
+With CAN verified (Phase 1) and the empty exo on the bench: open the serial
+console (CH343P port), press `a` (arm → closed-loop POS_FILTER), then `r`
+(run → 2 s init-settle ramp, then walking). `s` ramps home and idles; `e` is a
+software e-stop (hardware e-stop comes in Phase 5). Watch the status line:
+`ph` should go IDLE→INIT(1)→GAIT(2), `p01` cycling 0..1. Confirm the legs walk
+smoothly with no jerk at the GAIT→HOMING transition.
 
 ## Open hardware items
 - Verify **ESP32-S3-Touch-LCD-7** GPIO map (v7.1.5 config was the 4.3" variant).

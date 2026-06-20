@@ -92,6 +92,27 @@ static constexpr float GEAR_EFFICIENCY = 0.70f;
 static constexpr float JOINT_NM_PER_A =
     HR_TORQUE_CONSTANT_NM_A * GEAR_RATIO * KEF * GEAR_EFFICIENCY;
 
+// ---- ROM defaults (joint-frame deg) per kind (v7.1.5 anatomical) -----------
+static constexpr float ROM_HIP_MIN_DEG  = -18.0f, ROM_HIP_MAX_DEG  = 25.0f;
+static constexpr float ROM_KNEE_MIN_DEG =  -6.0f, ROM_KNEE_MAX_DEG = 31.0f;
+
+// ---- Init pose (joint-frame deg) per joint idx HR/KR/HL/KL ------------------
+static constexpr float INIT_POS_DEG[PG_NJOINTS] = { 10.0f, 8.5f, -6.0f, 9.5f };
+
+// ---- Gait engine -----------------------------------------------------------
+static constexpr float    DEFAULT_GAIT_CPS = 0.36f;   // cycles/s (firmware speed=2)
+static constexpr float    DEFAULT_AMP_R = 0.50f, DEFAULT_AMP_L = 0.50f;
+static constexpr uint32_t INIT_SETTLE_MS = 2000;      // hold init pose before walking
+static constexpr float    POS_FILTER_BANDWIDTH_HZ = 7.5f;  // provisioned via odrivetool
+                                                           // (CAN can't set at runtime)
+// ---- Homing ----------------------------------------------------------------
+static constexpr float    HOMING_TOL_TURNS = 0.05f;
+static constexpr uint32_t HOMING_TIMEOUT_MS = 4000;
+static constexpr uint32_t HOMING_RAMP_MS    = 1500;
+
+// canonical order guarantees idx 0,1 = Right leg; 2,3 = Left leg
+static inline bool joint_is_left(int idx) { return idx >= 2; }
+
 // ---- Loop rates ------------------------------------------------------------
 static constexpr uint32_t TELEM_HZ = 100;
 static constexpr uint32_t GAIT_STEP_HZ = 50;

@@ -1,6 +1,38 @@
-// gait.h — pure trajectory + phase math.  [Phase 2]
-// Port of pgear_tools/pi_gui/pgear_pi/gait.py (which already mirrors
-// pos_only.ino): lerp_traj, joint phase units (+L-leg half-cycle offset),
-// gait_target_deg, ROM clamp, deg->motor-turns, advance_phase.
+// ============================================================================
+// gait.h — gait reference trajectory + phase math (pure functions).  [Phase 2]
+// Port of pgear_tools/pi_gui/pgear_pi/gait.py. Bit-identical 50-point pediatric
+// reference (Exoskeleton_control_v4.txt hipAngles[]/kneeAngles[]); L-leg is the
+// R-leg arrays phase-shifted half a cycle. Allocation-free hot path.
+// ============================================================================
 #pragma once
-// TODO P2: trajectory tables (HIP_DEG/KNEE_DEG, 50 pts) + the helpers above.
+#include "constants.h"
+
+static constexpr int PHASE_STEPS = 50;
+static constexpr int LEFT_PHASE_OFFSET = 25;   // half cycle
+
+extern const float HIP_DEG[PHASE_STEPS];
+extern const float KNEE_DEG[PHASE_STEPS];
+
+// Linear-interp lookup at fractional phase in [0,50). Matches pos_only lerpTraj.
+float gait_lerp_traj(const float* arr, float phase_units);
+
+// Global phase [0,1) -> per-joint fractional trajectory index (+L offset).
+float gait_joint_phase_units(bool is_left, float phase01);
+
+// Sample one joint's reference [joint-frame deg], amp-scaled. NOT yet ROM-
+// clamped or direction-applied (caller applies ROM then direction).
+float gait_target_deg(JointKind kind, bool is_left, float phase01, float amp);
+
+// Soft per-joint ROM clamp (joint-frame deg).
+float gait_clamp_to_rom(float deg, float rom_min, float rom_max);
+
+// Final stage: joint-frame deg -> signed motor turns (direction applied last).
+float gait_deg_to_motor_turns(float deg, int dir);
+
+// Advance phase by dt at cps cycles/s, wrap at 1.0.
+float gait_advance_phase(float phase01, float dt_s, float cps);
+
+// Home / init pose targets [motor turns] (ROM-clamped, fixes firmware bypass).
+float gait_home_target_turns(float home_offset_deg, float rom_min, float rom_max, int dir);
+float gait_init_target_turns(float init_pos_deg, float home_offset_deg,
+                             float rom_min, float rom_max, int dir);
