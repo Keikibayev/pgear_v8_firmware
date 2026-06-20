@@ -40,7 +40,7 @@ coefficients via `OP_LOAD_COEFFS` (`JointCoeffs`). ESP32 only evaluates
 | **1** 🔨 | `can_odrive.cpp` TWAI port (RX task core 0, TX, watchdog, snapshot) + standalone `pgear_smoke_can` test | **deterministic CAN** — bench-verify pending |
 | **2** 🔨 | `gait` + `gait_engine` ports + control-task integration + temp serial bench keys (a/r/s/d/e) | smooth motion, no jitter — bench-verify pending |
 | **3** 🔨 | ADS1256 coproc firmware + `coproc_link` (UART2/43/44) + force→torque fusion; wiring doc | torque sensing — bench-verify pending (`LogPacket` emit moves to P4/WiFi) |
-| **4** | PC supervisor: strip control loop from pi_gui; `CommandPacket`; profiles → coeffs | host = pure pendant |
+| **4** 🔨 | Firmware host link done: WiFi STA, UDP LogPacket telemetry, TCP CommandPacket server + dispatch, link-loss watchdog, calib coeff store/predict. **pi_gui supervisor adaptation (strip loop, send cmds/decode telem) still TODO** | host = pure pendant — bench-verify pending |
 | **5** | safety supervisor (estop, watchdog, ROM enforce, sensor rate-cap/glitch, drift) | safe to strap a patient |
 | **6** | position-mode AAN + trim + passive-model eval | assist-as-needed on-chip |
 | **6b** | torque-mode impedance law (`TorqueGaitController`) | compliant mode |

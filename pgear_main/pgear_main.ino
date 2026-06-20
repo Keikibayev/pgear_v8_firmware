@@ -19,6 +19,10 @@
 #include "can_odrive.h"     // [Phase 1] TWAI + ODrive protocol
 #include "gait_engine.h"    // [Phase 2] gait state machine + setpoints
 #include "coproc_link.h"    // [Phase 3] ADS1256 coproc over UART
+#include "calib.h"          // [Phase 4] downloaded model store + predict
+#include "host_link.h"      // [Phase 4] WiFi: UDP telemetry + TCP commands
+#include "wifi_config.h"    // HOST_TELEM_HZ
+#include <string.h>
 
 // Coproc UART (43/44) shares pins with the CH343P text console via the board's
 // UART switch — they can't both run. Set USE_COPROC=1 once the coproc is wired
@@ -46,6 +50,12 @@ volatile bool     g_running     = false;
 // in Phase 4.
 enum PgCmd { CMD_NONE = 0, CMD_ARM, CMD_RUN, CMD_STOP, CMD_DISARM, CMD_ESTOP };
 volatile PgCmd g_pendingCmd = CMD_NONE;
+
+// Stored supervisor state (consumed by the control law in Phase 6).
+volatile uint8_t g_controlMode = MODE_POSITION;
+volatile bool    g_aanEnabled  = false;
+volatile float   g_assistLevel = 0.5f;
+volatile uint16_t g_logSeq     = 0;
 
 static GaitEngine g_engine;
 
@@ -91,6 +101,93 @@ static void handlePendingCmd() {
                                       Serial.println("[ctrl] STOP -> homing"); } break;
     case CMD_DISARM: disarmDrives(); break;
     case CMD_ESTOP:  doEstop(); break;
+    default: break;
+  }
+}
+
+// ---- LogPacket builder (comms core) ----------------------------------------
+static void build_logpacket(LogPacket* p) {
+  memset(p, 0, sizeof(*p));
+  p->start0 = 0xBB; p->start1 = 0x66; p->version = PG_LOGPACKET_VERSION;
+  p->seq = g_logSeq++;
+  p->headerCrc = pg_crc16_ccitt((const uint8_t*)p, 6);
+  p->timeMs = millis();
+  p->gaitPhase = (uint8_t)g_engine.phase;
+  p->stepIdx = (uint8_t)(g_engine.phase01 * 50.0f);
+  p->profileSlot = 0xFF;
+
+  BusTelemetry snap; can_snapshot(&snap);
+  CoprocData cd;
+#if USE_COPROC
+  coproc_get(&cd);
+#endif
+  uint8_t health = 0;
+  for (int i = 0; i < PG_NJOINTS; i++) {
+    const AxisTelemetry& a = snap.j[i];
+    p->refPos[i]      = g_engine.joints[i].last_ref_turns;
+    p->pos[i]         = a.pos_turns;
+    p->vel[i]         = a.vel_turns_s;
+    p->iqMeasured[i]  = a.iq_measured_a;
+    p->motorEffort[i] = a.iq_measured_a * JOINT_NM_PER_A;
+    p->measTorque[i]  = cd.torqueNm[i];
+    uint32_t age = a.last_frame_ms ? (millis() - a.last_frame_ms) : 0xFFFFu;
+    if (age > 0xFFFFu) age = 0xFFFFu;
+    p->hbAgeMs[i]     = (uint16_t)age;
+    if (cd.online && !(cd.sensorFlags & (1 << i))) health |= (1 << i);
+  }
+  p->sensorHealth = health;
+  p->linkAgeMs = (uint16_t)(cd.ageMs > 0xFFFFu ? 0xFFFFu : cd.ageMs);
+
+  uint16_t flags = 0;
+  if (g_running)        flags |= LP_FLAG_RUN;
+  if (g_estop)          flags |= LP_FLAG_ESTOP;
+  if (cd.online)        flags |= LP_FLAG_SENSOR_ONLINE;
+  if (g_aanEnabled)     flags |= LP_FLAG_AAN_ENABLED;
+  if (g_controlMode == MODE_TORQUE) flags |= LP_FLAG_TORQUE_MODE;
+  p->flags = flags;
+
+  p->ampR = g_engine.amp_r; p->ampL = g_engine.amp_l;
+  p->assistR = g_assistLevel; p->assistL = g_assistLevel;
+  p->ctrlLoopUs = g_ctrlLoopUs;
+
+  p->crc = pg_crc16_ccitt((const uint8_t*)p, sizeof(LogPacket) - 2);
+}
+
+// ---- CommandPacket dispatch (comms core) -----------------------------------
+static float payload_f32(const CommandPacket& c, int off) {
+  float v = 0.0f; if (off + 4 <= c.len) memcpy(&v, &c.payload[off], 4); return v;
+}
+static void dispatchCommand(const CommandPacket& c) {
+  switch (c.opcode) {
+    case OP_NOP:          break;                       // keepalive (RX ts updated)
+    case OP_ARM:          g_pendingCmd = CMD_ARM;    break;
+    case OP_DISARM:       g_pendingCmd = CMD_DISARM; break;
+    case OP_RUN:          g_pendingCmd = CMD_RUN;    break;
+    case OP_STOP:         g_pendingCmd = CMD_STOP;   break;
+    case OP_ESTOP:        g_pendingCmd = CMD_ESTOP;  break;
+    case OP_ESTOP_RESET:  g_estop = false;           break;
+    case OP_SET_MODE:     if (c.len >= 1) g_controlMode = c.payload[0]; break;
+    case OP_SET_CPS:      g_engine.cps   = payload_f32(c, 0); break;
+    case OP_SET_AMP_R:    g_engine.amp_r = payload_f32(c, 0); break;
+    case OP_SET_AMP_L:    g_engine.amp_l = payload_f32(c, 0); break;
+    case OP_SET_ASSIST:   g_assistLevel  = payload_f32(c, 0); break;
+    case OP_SET_AAN:      g_aanEnabled   = (c.len >= 1 && c.payload[0]); break;
+    case OP_SET_ROM:      if (c.joint < PG_NJOINTS) {
+                            g_engine.joints[c.joint].rom_min_deg = payload_f32(c, 0);
+                            g_engine.joints[c.joint].rom_max_deg = payload_f32(c, 4);
+                          } break;
+    case OP_SET_ENABLE:   if (c.joint < PG_NJOINTS && c.len >= 1)
+                            g_engine.joints[c.joint].enabled = c.payload[0]; break;
+    case OP_TARE:
+#if USE_COPROC
+      coproc_request_tare();
+#endif
+      break;
+    case OP_LOAD_COEFFS:  if (c.len >= (int)sizeof(JointCoeffs)) {
+                            JointCoeffs jc; memcpy(&jc, c.payload, sizeof(JointCoeffs));
+                            calib_load_coeffs(&jc);
+                          } break;
+    // OP_SET_BW/DIR, JOG_*, TEACH_*, OBSERVE_*, CAL_*, TRIM_*, SWEEP_* : Phase 6/7
     default: break;
   }
 }
@@ -170,7 +267,7 @@ void setup() {
 #if USE_COPROC
   coproc_link_init();                // [Phase 3] ADS1256 coproc on UART2 (43/44)
 #endif
-  // --- TODO P4: host_link_init();      (WiFi STA join hotspot; UDP telem + TCP cmds)
+  host_link_init();                  // [Phase 4] WiFi STA: UDP telemetry + TCP cmds
 
   xTaskCreatePinnedToCore(controlTask, "control", 8192, nullptr,
                           configMAX_PRIORITIES - 2, nullptr, CTRL_CORE);
@@ -213,6 +310,27 @@ void loop() {
 #if USE_COPROC
   coproc_link_poll();                      // parse coproc RX (comms core)
 #endif
+
+  // Host link: maintain WiFi/TCP, dispatch incoming commands.
+  host_link_poll();
+  CommandPacket cmd;
+  while (host_link_get_command(&cmd)) dispatchCommand(cmd);
+
+  // Link-loss watchdog: GUI talked then went silent while running -> safe hold.
+  if (g_running && host_link_last_rx_ms() != 0 && host_link_link_lost()) {
+    static uint32_t lastWarn = 0;
+    if (now - lastWarn > 2000) { lastWarn = now;
+      Serial.println("[host] link lost while running -> homing (safe hold)"); }
+    g_pendingCmd = CMD_STOP;
+  }
+
+  // Telemetry: broadcast LogPacket at HOST_TELEM_HZ.
+  static uint32_t lastTelem = 0;
+  if (now - lastTelem >= (uint32_t)(1000 / HOST_TELEM_HZ)) {
+    lastTelem = now;
+    LogPacket lp; build_logpacket(&lp);
+    host_link_send_telemetry((const uint8_t*)&lp, sizeof(lp));
+  }
 
   if (now - lastStatus >= 500) {
     lastStatus = now;
