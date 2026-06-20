@@ -121,6 +121,36 @@ static constexpr uint32_t HOMING_RAMP_MS    = 1500;
 // canonical order guarantees idx 0,1 = Right leg; 2,3 = Left leg
 static inline bool joint_is_left(int idx) { return idx >= 2; }
 
+// ---- AAN (position-mode phase-yielding overlay) ----------------------------
+static constexpr float AAN_DETECTION_THRESHOLD_NM = 3.0f;   // ~95th-pct noise
+static constexpr float AAN_YIELD_FULL_NM          = 6.0f;
+static constexpr float AAN_FACTOR_ENGAGE_TC_S     = 0.10f;  // slow to yield
+static constexpr float AAN_FACTOR_RELEASE_TC_S    = 0.03f;  // quick to resume
+// assist-level knob [0..1] scales the yield threshold (0.5 == legacy 3/6)
+static constexpr float AAN_THRESHOLD_AT_MAX_ASSIST_NM = 1.0f;  // assist=1 -> light push
+static constexpr float AAN_THRESHOLD_AT_MIN_ASSIST_NM = 5.0f;  // assist=0 -> work hard
+static constexpr float AAN_YIELD_SPAN_NM              = 3.0f;  // hi = lo + span
+
+// ---- Torque-mode impedance (port of labs/torque_gait.py defaults) ----------
+static constexpr float TQ_PATIENT_ASSIST_FRAC   = 0.5f;   // alpha: fraction of patient passive carried
+static constexpr float TQ_K_HIP_FALLBACK_NM     = 2.0f;   // grav gain w/o a model
+static constexpr float TQ_K_KNEE_FALLBACK_NM    = 0.5f;
+static constexpr float TQ_KASSIST_HIP_NM_DEG    = 0.08f;  // soft tracking spring
+static constexpr float TQ_KASSIST_KNEE_NM_DEG   = 0.05f;
+static constexpr float TQ_ASSIST_SAT_DEG        = 12.0f;
+static constexpr float TQ_BDAMP_HIP_NM_S_DEG    = 0.02f;
+static constexpr float TQ_BDAMP_KNEE_NM_S_DEG   = 0.02f;
+static constexpr float TQ_ROM_MARGIN_DEG        = 4.0f;   // virtual-wall band
+static constexpr float TQ_KWALL_NM_DEG          = 0.4f;
+static constexpr float TQ_BWALL_NM_S_DEG        = 0.06f;
+static constexpr float TQ_GATE_MIN              = -1.0f;  // allow full reverse
+static constexpr float TQ_GATE_VREF_FLOOR_DEG_S = 2.0f;
+static constexpr float TQ_GATE_HOLD_BAND        = 0.05f;
+static constexpr float TQ_REVERSE_ENABLE        = -0.15f;
+static constexpr float TQ_TAU_RATE_NM_S         = 40.0f;  // joint torque slew
+// joint torque [Nm] -> ODrive motor input_torque [Nm] (inverse of the gear path)
+static constexpr float DRIVE_NM_PER_JOINT_NM = 1.0f / (GEAR_RATIO * KEF * GEAR_EFFICIENCY);
+
 // ---- Safety ----------------------------------------------------------------
 // NO physical ODrive endstops in this setup -> the firmware motor-turn envelope
 // clamp (HIP/KNEE_TURN_MIN/MAX above) is the ONLY hard ROM limit. Every
@@ -132,6 +162,10 @@ static inline bool joint_is_left(int idx) { return idx >= 2; }
 static constexpr float SENSOR_MAX_RATE_NM_PER_S   = 20.0f;  // glitch if exceeded
 static constexpr int   SENSOR_GLITCH_ESTOP_PER_S  = 50;     // glitches/s -> e-stop
 static constexpr float CROSSCHECK_DIVERGE_NM      = 8.0f;   // iq vs FUTEK warn
+// Measured position beyond the envelope by this margin -> e-stop. The position
+// clamp can't catch a torque-mode runaway (we command torque, not position), so
+// this guards the no-endstop torque path.
+static constexpr float ENV_OVERRUN_MARGIN_TURNS   = 0.5f;
 
 // ---- Loop rates ------------------------------------------------------------
 static constexpr uint32_t TELEM_HZ = 100;

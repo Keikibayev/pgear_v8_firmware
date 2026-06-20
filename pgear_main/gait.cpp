@@ -44,6 +44,15 @@ float gait_target_deg(JointKind kind, bool is_left, float phase01, float amp) {
   return amp * gait_lerp_traj(arr, u);
 }
 
+float gait_ref_vel_deg_s(JointKind kind, bool is_left, float phase01, float amp, float cps) {
+  const float eps = 0.01f;
+  float p1 = phase01 + eps; while (p1 >= 1.0f) p1 -= 1.0f;
+  float p0 = phase01 - eps; while (p0 < 0.0f)  p0 += 1.0f;
+  float r1 = gait_target_deg(kind, is_left, p1, amp);
+  float r0 = gait_target_deg(kind, is_left, p0, amp);
+  return ((r1 - r0) / (2.0f * eps)) * cps;
+}
+
 float gait_clamp_to_rom(float deg, float rom_min, float rom_max) {
   if (deg < rom_min) return rom_min;
   if (deg > rom_max) return rom_max;

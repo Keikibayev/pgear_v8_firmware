@@ -1,17 +1,44 @@
-// control.h — the two control-law policies over one shared core.  [Phase 6 / 6b]
-// A controlMode field (OP_SET_MODE; LP_FLAG_TORQUE_MODE) selects per tick.
+// ============================================================================
+// control.h — the two control-law policies over one shared core.  [Phase 6/6b]
+// A controlMode field (g_controlMode; LP_FLAG_TORQUE_MODE) selects per tick.
 //
-// Position mode (Phase 6, port of worker.py _update_aan etc.):
-//   POS_FILTER set_input_pos + AAN-by-iq PHASE-YIELDING. Patient torque =
-//   iq_meas - empty.predict() [- passive.predict() / - trim]. Worst-joint
-//   global yield -> cps_modifier; assist-level scales thresholds; asymmetric
-//   LPF (engage 100 ms / release 30 ms).
+// Position mode (Phase 6, port of worker.py): POS_FILTER + AAN-by-iq
+//   phase-yielding. patient_nm = (iq_meas - predict_empty - predict_passive)
+//   * JOINT_NM_PER_A; resistance = -gait_dir * patient_nm; worst-joint global
+//   yield -> cps_modifier; assist-level scales thresholds; asymmetric LPF.
 //
-// Torque mode (Phase 6b, port of labs/torque_gait.py TorqueGaitController):
-//   tau = tau_grav(theta) + k_assist*sat(theta_ref-theta) - B*theta_dot
-//         + tau_rom(theta,theta_dot);  capped (pain limit) + slewed.
-//   Phase advance gated by cooperation gate g (patient leads pace/reversal).
+// Torque mode (Phase 6b, port of labs/torque_gait.py): moving-reference
+//   impedance + cooperation gate; outputs ODrive motor input_torque per joint.
+// ============================================================================
 #pragma once
-#include "protocol.h"
-// TODO P6:  step_position(dt, telem) -> {setpoints, cps_modifier}
-// TODO P6b: step_torque(dt, telem)   -> {motor_input_torque}
+#include "gait_engine.h"
+#include "can_odrive.h"
+#include "coproc_link.h"
+
+// Per-joint patient torque [Nm] (+ = resisting the gait). For telemetry/AAN.
+struct PatientTorque {
+  float nm[PG_NJOINTS]   = {0};
+  bool  valid[PG_NJOINTS] = {false};
+};
+
+// Compute patient torque from iq residual vs the downloaded models.
+void control_patient_torque(const BusTelemetry* snap, const CoprocData* cd,
+                            const GaitEngine* eng, PatientTorque* out);
+
+// Position-mode AAN: update eng->cps_modifier from patient resistance + assist.
+// `aan_on` gates it (off -> modifier ramps back to 1.0). Returns the factor.
+float control_pos_aan(float dt_s, const GaitEngine* eng, const PatientTorque* pt,
+                      bool aan_on, float assist_level);
+
+// Torque-mode impedance step. Advances its own phase via the cooperation gate;
+// fills out_motor_nm[i] (ODrive input_torque) for enabled joints. `started`
+// gates phase advance (false -> gravity-comp/float only).
+struct TorqueState {
+  float phase01 = 0.0f;
+  float g_filt  = 1.0f;
+  float prev_tau[PG_NJOINTS] = {0};
+};
+void control_torque_step(float dt_s, bool started, float cps_base,
+                         const BusTelemetry* snap, const CoprocData* cd,
+                         const GaitEngine* eng, TorqueState* st,
+                         float out_motor_nm[PG_NJOINTS], bool out_has[PG_NJOINTS]);

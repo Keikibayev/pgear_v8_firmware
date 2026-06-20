@@ -23,6 +23,10 @@ float gait_joint_phase_units(bool is_left, float phase01);
 // clamped or direction-applied (caller applies ROM then direction).
 float gait_target_deg(JointKind kind, bool is_left, float phase01, float amp);
 
+// d(theta_ref)/dt at the given phase [deg/s], central difference * cps. Used by
+// the AAN gait-direction sign and the torque-mode cooperation gate.
+float gait_ref_vel_deg_s(JointKind kind, bool is_left, float phase01, float amp, float cps);
+
 // Soft per-joint ROM clamp (joint-frame deg).
 float gait_clamp_to_rom(float deg, float rom_min, float rom_max);
 

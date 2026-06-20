@@ -22,6 +22,7 @@
 #include "calib.h"          // [Phase 4] downloaded model store + predict
 #include "host_link.h"      // [Phase 4] WiFi: UDP telemetry + TCP commands
 #include "safety.h"         // [Phase 5] e-stop, hb watchdog, envelope clamp, sensor wd
+#include "control.h"        // [Phase 6] pos-mode AAN + torque-mode impedance
 #include "wifi_config.h"    // HOST_TELEM_HZ
 #include <string.h>
 
@@ -60,19 +61,27 @@ volatile uint16_t g_logSeq     = 0;
 volatile uint8_t g_crossCheckFault = 0;
 volatile uint8_t g_hbErrorByte     = 0;
 
-static GaitEngine g_engine;
+static GaitEngine   g_engine;
+static TorqueState  g_torque;     // [Phase 6b] torque-mode controller state
+static PatientTorque g_patient;   // shared patient-torque estimate
+volatile float      g_aanFactor = 1.0f;
 
 // ---- run-state orchestration (executed on the control core) ----------------
 static void armDrives() {
+  bool torque = (g_controlMode == MODE_TORQUE);
   for (int i = 0; i < PG_NJOINTS; i++) {
     if (!g_engine.joints[i].enabled) continue;
     can_clear_errors(i);
-    can_set_control_mode(i, CM_POSITION, IM_POS_FILTER);  // bandwidth provisioned
+    if (torque) can_set_control_mode(i, CM_TORQUE, IM_PASSTHROUGH);
+    else        can_set_control_mode(i, CM_POSITION, IM_POS_FILTER); // bw provisioned
     can_set_limits(i, ABS_VEL_LIM, 10.0f);                // bench-safe current cap
     can_set_axis_state(i, AXIS_CLOSED_LOOP);
   }
+  // reset torque-mode state so it starts from the current pose
+  g_torque.phase01 = 0.0f; g_torque.g_filt = 1.0f;
+  for (int i = 0; i < PG_NJOINTS; i++) g_torque.prev_tau[i] = 0.0f;
   g_armed = true;
-  Serial.println("[ctrl] ARMED (closed-loop, POS_FILTER)");
+  Serial.printf("[ctrl] ARMED (%s)\n", torque ? "TORQUE" : "POS_FILTER");
 }
 
 static void disarmDrives() {
@@ -98,10 +107,24 @@ static void handlePendingCmd() {
   g_pendingCmd = CMD_NONE;
   switch (c) {
     case CMD_ARM:    if (!g_estop) armDrives(); break;
-    case CMD_RUN:    if (g_armed) { g_engine.start_gait(); g_running = true;
-                                    Serial.println("[ctrl] RUN (gait)"); } break;
-    case CMD_STOP:   if (g_running) { g_engine.start_homing();
-                                      Serial.println("[ctrl] STOP -> homing"); } break;
+    case CMD_RUN:    if (g_armed) {
+                       if (g_controlMode == MODE_TORQUE) {
+                         g_torque.phase01 = 0.0f; g_running = true;
+                         Serial.println("[ctrl] RUN (torque)");
+                       } else {
+                         g_engine.start_gait(); g_running = true;
+                         Serial.println("[ctrl] RUN (gait)");
+                       }
+                     } break;
+    case CMD_STOP:   if (g_running) {
+                       if (g_controlMode == MODE_TORQUE) {
+                         g_running = false;   // controller holds via gravity-comp
+                         Serial.println("[ctrl] STOP (torque hold)");
+                       } else {
+                         g_engine.start_homing();
+                         Serial.println("[ctrl] STOP -> homing");
+                       }
+                     } break;
     case CMD_DISARM: disarmDrives(); break;
     case CMD_ESTOP:  doEstop(); break;
     default: break;
@@ -115,8 +138,13 @@ static void build_logpacket(LogPacket* p) {
   p->seq = g_logSeq++;
   p->headerCrc = pg_crc16_ccitt((const uint8_t*)p, 6);
   p->timeMs = millis();
-  p->gaitPhase = (uint8_t)g_engine.phase;
-  p->stepIdx = (uint8_t)(g_engine.phase01 * 50.0f);
+  if (g_controlMode == MODE_TORQUE) {
+    p->gaitPhase = g_running ? (uint8_t)PH_GAIT : (uint8_t)PH_IDLE;
+    p->stepIdx = (uint8_t)(g_torque.phase01 * 50.0f);
+  } else {
+    p->gaitPhase = (uint8_t)g_engine.phase;
+    p->stepIdx = (uint8_t)(g_engine.phase01 * 50.0f);
+  }
   p->profileSlot = 0xFF;
 
   BusTelemetry snap; can_snapshot(&snap);
@@ -228,25 +256,38 @@ static void controlTask(void *arg) {
     g_crossCheckFault = cc; g_hbErrorByte = hb;
     if (trip && !g_estop) doEstop();
 
-    // --- TODO P6: control.step()  (pos-mode AAN  OR  torque-mode impedance)
-
-    // Gait setpoint output at GAIT_STEP_HZ (every GAIT_SUBDIV ticks).
+    // Control law at GAIT_STEP_HZ (every GAIT_SUBDIV ticks).
     if (++subdiv >= GAIT_SUBDIV) {
       subdiv = 0;
-      if (g_running) {
-        float turns[PG_NJOINTS]; bool has[PG_NJOINTS];
-        g_engine.tick(GAIT_DT_S, turns, has);
+      control_patient_torque(&snap, &cd, &g_engine, &g_patient);  // shared estimate
+
+      if (g_controlMode == MODE_TORQUE) {
+        // [6b] impedance: runs whenever ARMED (gravity-comp hold/float when not
+        // running; walks when running). No homing — STOP just stops the phase.
         if (g_armed) {
+          float mnm[PG_NJOINTS]; bool has[PG_NJOINTS];
+          control_torque_step(GAIT_DT_S, g_running, g_engine.cps,
+                              &snap, &cd, &g_engine, &g_torque, mnm, has);
           for (int i = 0; i < PG_NJOINTS; i++)
-            if (has[i])
-              can_set_input_pos(i, safety_clamp_turns(i, turns[i]));  // envelope = sole hard limit
+            if (has[i]) can_set_input_torque(i, mnm[i]);
         }
-        // STOP sequence finished -> settle to IDLE.
-        if (g_engine.phase == PH_HOMING &&
-            (g_engine.all_home_arrived() || g_engine.homing_timed_out())) {
-          g_engine.go_idle();
-          g_running = false;
-          Serial.println("[ctrl] homing done -> IDLE");
+      } else {
+        // [6] position-mode gait + AAN phase-yielding
+        if (g_running) {
+          g_aanFactor = control_pos_aan(GAIT_DT_S, &g_engine, &g_patient,
+                                        g_aanEnabled, g_assistLevel);
+          g_engine.cps_modifier = g_aanFactor;
+          float turns[PG_NJOINTS]; bool has[PG_NJOINTS];
+          g_engine.tick(GAIT_DT_S, turns, has);
+          if (g_armed)
+            for (int i = 0; i < PG_NJOINTS; i++)
+              if (has[i])
+                can_set_input_pos(i, safety_clamp_turns(i, turns[i]));  // envelope = sole hard limit
+          if (g_engine.phase == PH_HOMING &&
+              (g_engine.all_home_arrived() || g_engine.homing_timed_out())) {
+            g_engine.go_idle(); g_running = false;
+            Serial.println("[ctrl] homing done -> IDLE");
+          }
         }
       }
     }

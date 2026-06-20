@@ -53,11 +53,15 @@ bool safety_tick(bool armed, bool running,
   // 1) hardware E-STOP button (highest priority)
   if (safety_estop_pressed()) trip = true;
 
-  // 2) ODrive heartbeat watchdog — only meaningful once armed
+  // 2) ODrive heartbeat watchdog + position-envelope overrun — once armed.
   if (armed && snap) {
     for (int i = 0; i < PG_NJOINTS; i++) {
-      // (enabled-ness lives in the engine; treat any stale axis as a fault here)
       if (!snap->j[i].fb_valid) { hbErr |= (1 << i); trip = true; }
+      bool hip = (JOINTS[i].kind == KIND_HIP);
+      float lo = (hip ? HIP_TURN_MIN : KNEE_TURN_MIN) - ENV_OVERRUN_MARGIN_TURNS;
+      float hi = (hip ? HIP_TURN_MAX : KNEE_TURN_MAX) + ENV_OVERRUN_MARGIN_TURNS;
+      if (snap->j[i].fb_valid &&
+          (snap->j[i].pos_turns < lo || snap->j[i].pos_turns > hi)) trip = true;
     }
   }
 
