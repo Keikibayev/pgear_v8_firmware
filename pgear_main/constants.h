@@ -21,15 +21,18 @@ static constexpr uint32_t CAN_BITRATE   = 250000;   // 250 kbps (TWAI_TIMING_CON
 static constexpr int      CAN_CMD_BITS  = 5;        // id = (node<<5)|cmd
 static constexpr int      CAN_CMD_MASK  = 0x1F;
 
-// ⚠ PIN CONFLICT: v7.1.5 wired the CAN transceiver to GPIO 19/20 — but those
-// are the ESP32-S3 NATIVE-USB (D-/D+) pins. If CAN truly uses 19/20 on the
-// 7" board, the PC link CANNOT be native USB-CDC; use the board's UART-bridge
-// USB-C (CH343) instead. VERIFY the ESP32-S3-Touch-LCD-7 schematic before trust.
+// RESOLVED (verified against Waveshare docs): on the ESP32-S3-Touch-LCD-7 the
+// CAN transceiver shares GPIO19/20 (the native-USB D-/D+ pins) via an
+// FSUSB42UMX switch selected by CH422G EXIO5 (USB_SEL). EXIO5=HIGH -> CAN.
+// We use CAN on 19/20 (see board_io.cpp) and run the PC link over the board's
+// SEPARATE "USB TO UART" CH343P port (UART0, GPIO43/44) — so set the Arduino
+// option "USB CDC On Boot: DISABLED" so `Serial` maps to that port, and flash
+// over it too (native USB is off while EXIO5=CAN).
 #ifndef CAN_RX_PIN
-#define CAN_RX_PIN 19
+#define CAN_RX_PIN 19    // CANRX (Waveshare pinout)
 #endif
 #ifndef CAN_TX_PIN
-#define CAN_TX_PIN 20
+#define CAN_TX_PIN 20    // CANTX (Waveshare pinout)
 #endif
 
 static constexpr float    ODRIVE_WD_TIMEOUT_S = 0.5f;

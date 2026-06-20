@@ -70,9 +70,12 @@ docs/PLAN.md                 full plan: phases, packet contracts, port list
 ## Build
 
 Arduino-ESP32 (same framework as v7.1.5). Board: **Waveshare
-ESP32-S3-Touch-LCD-7** (⚠ verify its GPIO map — v7.1.5's config was for the
-4.3" variant). Enable *USB CDC On Boot* so `Serial` is the native USB-CDC
-link to the PC. Each subfolder is its own sketch.
+ESP32-S3-Touch-LCD-7**. CAN shares GPIO19/20 with native USB via a CH422G
+switch, so we run CAN there (`board_io.cpp` sets EXIO5=HIGH) and use the
+board's **second USB-C "USB TO UART" (CH343P) port** for the PC link and
+flashing — set Arduino **USB CDC On Boot: DISABLED** so `Serial` maps to that
+port. Needs the Waveshare **ESP_IOExpander** library. Each subfolder is its
+own sketch. (⚠ verify the 7" full GPIO map — v7.1.5's config was the 4.3".)
 
 ## Status
 

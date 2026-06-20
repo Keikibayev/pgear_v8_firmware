@@ -15,6 +15,7 @@
 // ============================================================================
 #include "protocol.h"
 #include "constants.h"
+#include "board_io.h"       // CH422G: route GPIO19/20 to CAN (not native USB)
 #include "can_odrive.h"     // [Phase 1] TWAI + ODrive protocol
 
 // ---- Control task configuration --------------------------------------------
@@ -63,6 +64,10 @@ void setup() {
                 (unsigned)sizeof(LogPacket), (unsigned)PG_CMD_MAXPAYLOAD);
 
   // --- TODO P0: status_screen_init();  (panel bring-up, NO LVGL — text only)
+  // Route GPIO19/20 to the CAN transceiver (away from native USB). The PC link
+  // is the SEPARATE CH343P "USB TO UART" port, so this costs us nothing.
+  board_io_init();
+  board_io_set_can_mode(true);
   if (can_odrive_init()) {
     can_idle_all();                  // safe default: every axis IDLE at boot
   } else {

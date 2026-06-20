@@ -47,13 +47,16 @@ coefficients via `OP_LOAD_COEFFS` (`JointCoeffs`). ESP32 only evaluates
 | **7** | Jog / Teach-ROM / Observe modes | setup workflows |
 | **8** | status-screen polish; WiFi-UDP logger; kiosk/boot | field-ready |
 
+## CAN / USB routing — RESOLVED (verified vs Waveshare docs, Phase 1)
+On the ESP32-S3-Touch-LCD-7, CAN (TX=GPIO20, RX=GPIO19) **shares the native-USB
+D-/D+ pins** through an **FSUSB42UMX** switch selected by **CH422G EXIO5**
+(USB_SEL): EXIO5=HIGH → CAN, LOW → native USB. They cannot run at once. The
+board has a **2nd USB-C port** = "USB TO UART" via a **CH343P** bridge (UART0,
+GPIO43/44), independent of GPIO19/20. **Decision:** keep CAN on 19/20
+(EXIO5=HIGH, set in `board_io.cpp`); the PC link + flashing use the CH343P
+port. Arduino: set **USB CDC On Boot: DISABLED** so `Serial` = that port.
+
 ## Open hardware items
-- ⚠ **CAN vs native-USB pin conflict (found Phase 1):** v7.1.5 wired the CAN
-  transceiver to **GPIO 19/20**, which are the ESP32-S3 **native-USB D-/D+**
-  pins. If the 7" board keeps that wiring, the PC link CANNOT be native USB-CDC
-  — route it over the board's **UART-bridge USB-C** (CH343) instead, or move
-  CAN to free pins. Pins are `#define CAN_RX_PIN/CAN_TX_PIN` in `constants.h`.
-  Resolve this before/with bench-verifying Phase 1.
 - Verify **ESP32-S3-Touch-LCD-7** GPIO map (v7.1.5 config was the 4.3" variant).
 - Confirm per-axis `Kt` (torque mode depends on it); KR/HL/KL screw tightness.
 - Coproc UART pins on the 7" board.

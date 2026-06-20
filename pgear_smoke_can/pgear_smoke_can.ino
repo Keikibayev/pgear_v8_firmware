@@ -10,12 +10,16 @@
 // Mirrors the intent of pi_gui smoke_test_can.py. If you see heartbeats +
 // encoder estimates from all four node ids, CAN is good and Phase 2 can start.
 //
-// ⚠ Pins: v7.1.5 used GPIO 19/20, which collide with the S3 native USB. If
-// you flash this over native USB, CAN may not work until you move the link to
-// the UART-bridge USB-C. VERIFY the ESP32-S3-Touch-LCD-7 schematic.
+// ⚠ Pins: CAN shares GPIO19/20 with native USB via the CH422G EXIO5 switch.
+// This sketch sets EXIO5=HIGH (CAN mode) at boot, so flash/serial must use the
+// SEPARATE "USB TO UART" CH343P port (set Arduino "USB CDC On Boot: DISABLED").
+// Requires the Waveshare ESP_IOExpander library.
 // ============================================================================
 #include <Arduino.h>
 #include "driver/twai.h"
+#include <ESP_IOExpander_Library.h>
+
+#define EXIO_USB_SEL 5   // CH422G: HIGH = CAN mode
 
 #ifndef CAN_RX_PIN
 #define CAN_RX_PIN 19
@@ -56,6 +60,15 @@ void setup() {
   Serial.begin(115200);
   delay(300);
   Serial.println("\n[smoke_can] Phase 1 CAN bring-up test");
+
+  // Route GPIO19/20 to the CAN transceiver via CH422G EXIO5 (HIGH = CAN).
+  ESP_IOExpander* exp = new ESP_IOExpander_CH422G(
+      (i2c_port_t)I2C_NUM_0, ESP_IO_EXPANDER_I2C_CH422G_ADDRESS, 9, 8);
+  exp->init();
+  exp->begin();
+  exp->enableAllIO_Output();
+  exp->digitalWrite(EXIO_USB_SEL, HIGH);
+  Serial.println("[smoke_can] EXIO5=HIGH -> CAN mode");
 
   twai_general_config_t g =
       TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)CAN_TX_PIN, (gpio_num_t)CAN_RX_PIN,
