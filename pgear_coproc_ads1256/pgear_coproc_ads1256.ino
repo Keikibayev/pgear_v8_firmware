@@ -77,7 +77,7 @@ struct __attribute__((packed)) CalStatePacket {
   float   cal[PG_NJOINTS];
   uint16_t crc;
 };
-static_assert(sizeof(CalStatePacket) == 20, "CalStatePacket size");
+static_assert(sizeof(CalStatePacket) == 22, "CalStatePacket size");
 
 struct __attribute__((packed)) DownstreamPacket {
   uint8_t start0, start1, flags, reserved;

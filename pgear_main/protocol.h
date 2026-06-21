@@ -71,7 +71,7 @@ struct __attribute__((packed)) CalStatePacket {
   float    cal[PG_NJOINTS];
   uint16_t crc;
 };
-static_assert(sizeof(CalStatePacket) == 20, "CalStatePacket size");
+static_assert(sizeof(CalStatePacket) == 22, "CalStatePacket size");
 
 #define SENSOR_FLAG_CH0_BAD   (1 << 0)
 #define SENSOR_FLAG_CH1_BAD   (1 << 1)
@@ -234,7 +234,7 @@ struct __attribute__((packed)) JointCoeffs {
   float   calCps;       // cadence the fit was taken at
   float   calAmp;       // amplitude the fit was taken at
 };
-static_assert(sizeof(JointCoeffs) == 32, "JointCoeffs size");
+static_assert(sizeof(JointCoeffs) == 36, "JointCoeffs size");
 
 struct __attribute__((packed)) CommandPacket {
   uint8_t  start0;      // 0xCC
