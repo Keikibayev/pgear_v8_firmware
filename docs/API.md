@@ -240,7 +240,75 @@ Example WS command → bridge → TC:
 
 ---
 
-## 7. Versioning & keeping in sync
+## 7. Reaching FULL Python-GUI parity (host-side logic — use the bridge)
+
+§§2–3 fully specify the **device interface** — enough to ARM/RUN/tune/jog/teach/
+e-stop. But several things the Python GUI does are **host-side algorithms that
+are deliberately NOT in the wire protocol**. A head built from §§2–3 alone can
+control the device but cannot calibrate or show assist feedback like the GUI.
+
+| GUI feature | On the wire? | Where the logic lives |
+|---|---|---|
+| Empty-exo **calibration** (sweep → 5-coef least-squares fit + R²/guards) | no | `calibrator.MultiJointCalibrator` |
+| Patient **"Characterize"** (multi-cadence passive sweep + robust fit) / DC trim | no | `worker` + `calibrator` |
+| Live per-joint **patient torque + status** (iq − model) | no (derivable) | `worker._emit_patient_torque` |
+| **AAN factor** / **drift watcher** feedback | no | `worker` |
+| Per-joint **direction** (`SET_DIR`) | opcode exists, firmware TODO | — |
+
+**Do NOT reimplement the 5-coef fit in JavaScript.** Use the **bridge**
+([`pgear_tools/pi_gui/pgear_pi/bridge.py`](https://github.com/Keikibayev/pgear_tools/blob/feature/patient-profiles-cp-support/pi_gui/pgear_pi/bridge.py),
+docs in [`pi_gui/BRIDGE.md`](https://github.com/Keikibayev/pgear_tools/blob/feature/patient-profiles-cp-support/pi_gui/BRIDGE.md)),
+which hosts this logic by **reusing the production modules** and exposes it as
+JSON ops. This is how a head reaches full parity.
+
+### 7.1 Derived telemetry — already in the bridge's `telemetry` message
+- `patient_torque[4]` [Nm] and `patient_status[4]`
+  (`"ok"` / `"no_baseline"` / `"not_gait"`). The bridge computes `iq − model`
+  per joint from the loaded coefficients — **no head-side math needed**.
+- Plus everything from the LogPacket, with `pos_deg` already converted.
+
+### 7.2 Calibration ops — bridge runs the sweep → fit → `LOAD_COEFFS` → replies
+- `{"type":"calibrate","joints":[0,1,2,3],"duration":30}` — empty-exo baseline.
+  **Precondition: device ARM + RUN (gait), exo EMPTY.** Reply:
+  `{"type":"calibrate_result","kind":0,"joints":{idx:{coef,r2,resid_std,cps,amp,n}},"skipped":[...]}`.
+- `{"type":"characterize","joints":[...],"cadences":[0.08,0.12,0.16]}` — patient
+  passive-load model (multi-cadence, robust outlier-rejecting fit).
+  **Precondition: device ARM + RUN, patient strapped + passive.** Same reply
+  shape (`kind:1`).
+- **E-STOP from any head cancels a running sweep.** Store the returned `coef`
+  (+ r2/resid) in Postgres; re-apply later.
+
+### 7.3 Apply models / profiles
+- `{"type":"load_coeffs","joint":0,"kind":0|1,"coef":[a,b,c,d,e],
+   "resid_std":0,"cal_cps":0,"cal_amp":0}` — one model → device **and** bridge cache.
+- `{"type":"load_profile","profile":{…}}` — a full patient profile in one shot.
+- `{"type":"clear_models"}` — drop the bridge's cached models.
+
+### 7.4 Patient profile JSON schema (what to store in Postgres)
+```json
+{
+  "mode": "position",                 // or "torque"
+  "cps": 0.36, "amp_r": 0.5, "amp_l": 0.5,
+  "assist": 0.5, "aan": true,
+  "coeffs": [[0,0,[a,b,c,d,e]], [0,1,[a,b,c,d,e]], ...],  // [joint, kind, coef5]
+  "rom":    {"0": [-18, 25], "1": [-6, 31]},              // joint -> [min,max] deg
+  "enable": {"0": true, "1": true}
+}
+```
+**Split (important):** `kind=0` (`empty`) coeffs describe the **bare
+exoskeleton** → store **once per device** (exo params table). `kind=1`
+(`patient_passive`) + `rom`/`assist`/`aan`/`cps`/`amp` → **per patient**.
+
+### 7.5 So a head reaches full GUI parity by
+1. reading the enriched telemetry (incl. `patient_torque`) — done for you;
+2. calling `calibrate` / `characterize` — the fit runs in the bridge (reusing
+   `calibrator.py`, the same code the GUI uses);
+3. storing/applying profiles via `load_profile`.
+
+Not-yet-bridged GUI extras (cosmetic, add later if needed): the exact
+"Assist: easing for KR …" label text and the drift-watcher warning string.
+
+## 8. Versioning & keeping in sync
 - `protocol.h` is the contract; `LogPacket.version == 3`. Validate it.
 - If a struct changes, bump the version and update both `esp32_link.py` and the
   bridge. Struct sizes are guarded by `static_assert` on the device.
