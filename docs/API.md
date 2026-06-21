@@ -92,8 +92,8 @@ device is *running* and hears nothing for **1 s**, it auto-ramps to a safe home.
 | `STOP` | 4 | — | running | pos: ramp home → idle; torque: hold (gravity-comp) | D |
 | `ESTOP` | 5 | — | any | latch e-stop, idle all | D |
 | `ESTOP_RESET` | 6 | — | — | clear latched e-stop | D |
-| `IDLE` | 7 | — | — | (reserved) | — |
-| `HOME` | 8 | — | — | (reserved; pos uses STOP) | — |
+| `IDLE` | 7 | — | — | idle all axes (= disarm) | D |
+| `HOME` | 8 | — | running | ramp to home pose (= stop) | D |
 
 ### Mode + live tunables
 | op | # | payload | effect | |
@@ -111,7 +111,7 @@ device is *running* and hears nothing for **1 s**, it auto-ramps to a safe home.
 |---|---|---|---|---|
 | `SET_ROM` | 16 | `f32 min, f32 max` (joint-frame deg) | per-joint soft ROM | D |
 | `SET_ENABLE` | 17 | `u8` 0/1 | include/exclude a joint | D |
-| `SET_DIR` | 18 | `i8` (-1/+1) | direction (setup) | — |
+| `SET_DIR` | 18 | `i8` (-1/+1) | per-joint direction (setup; apply when idle) | D |
 
 ### Setup modes (mutually exclusive with gait/torque)
 | op | # | payload | effect | |
@@ -253,7 +253,7 @@ control the device but cannot calibrate or show assist feedback like the GUI.
 | Patient **"Characterize"** (multi-cadence passive sweep + robust fit) / DC trim | no | `worker` + `calibrator` |
 | Live per-joint **patient torque + status** (iq − model) | no (derivable) | `worker._emit_patient_torque` |
 | **AAN factor** / **drift watcher** feedback | no | `worker` |
-| Per-joint **direction** (`SET_DIR`) | opcode exists, firmware TODO | — |
+| Per-joint **direction** (`SET_DIR`) | ✅ now handled on device | — |
 
 **Do NOT reimplement the 5-coef fit in JavaScript.** Use the **bridge**
 ([`pgear_tools/pi_gui/pgear_pi/bridge.py`](https://github.com/Keikibayev/pgear_tools/blob/feature/patient-profiles-cp-support/pi_gui/pgear_pi/bridge.py),

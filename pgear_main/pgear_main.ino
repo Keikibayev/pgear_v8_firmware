@@ -206,6 +206,8 @@ static void dispatchCommand(const CommandPacket& c) {
     case OP_STOP:         g_pendingCmd = CMD_STOP;   break;
     case OP_ESTOP:        g_pendingCmd = CMD_ESTOP;  break;
     case OP_ESTOP_RESET:  g_estop = false;           break;
+    case OP_IDLE:         g_pendingCmd = CMD_DISARM; break;   // idle all axes
+    case OP_HOME:         g_pendingCmd = CMD_STOP;   break;   // ramp to home pose
     case OP_SET_MODE:     if (c.len >= 1) g_controlMode = c.payload[0]; break;
     case OP_SET_CPS:      g_engine.cps   = payload_f32(c, 0); break;
     case OP_SET_AMP_R:    g_engine.amp_r = payload_f32(c, 0); break;
@@ -218,6 +220,8 @@ static void dispatchCommand(const CommandPacket& c) {
                           } break;
     case OP_SET_ENABLE:   if (c.joint < PG_NJOINTS && c.len >= 1)
                             g_engine.joints[c.joint].enabled = c.payload[0]; break;
+    case OP_SET_DIR:      if (c.joint < PG_NJOINTS && c.len >= 1)
+                            g_engine.joints[c.joint].direction = (int8_t)c.payload[0]; break;
     case OP_TARE:
 #if USE_COPROC
       coproc_request_tare();

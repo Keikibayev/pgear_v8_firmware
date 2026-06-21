@@ -33,7 +33,11 @@ void control_patient_torque(const BusTelemetry* snap, const CoprocData* cd,
     const AxisTelemetry& a = snap->j[i];
     if (!a.fb_valid) continue;
     if (!calib_has(i, COEFF_EMPTY)) continue;       // need a baseline to subtract
-    float deg = jdeg(eng, a, i), vel = jvel(eng, a, i);
+    // Model convention (matches calibrator.py + the JSON baselines + worker.py):
+    //   deg = joint-frame degrees (direction applied); vel = RAW motor turns/s
+    //   (NOT direction-applied, NOT deg/s). The fit and predict must agree on this.
+    float deg = jdeg(eng, a, i);
+    float vel = a.vel_turns_s;                       // raw turns/s, per the fit
     float iq_pred = calib_predict(i, COEFF_EMPTY, deg, vel)
                   + calib_predict(i, COEFF_PATIENT_PASSIVE, deg, vel);
     out->nm[i] = (a.iq_measured_a - iq_pred) * JOINT_NM_PER_A;
