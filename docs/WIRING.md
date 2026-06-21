@@ -59,7 +59,7 @@ EXIO5 = HIGH so GPIO19/20 route to the transceiver, not native USB.)
 
 ## 3. Coproc ESP32 ↔ ADS1256 — SPI (mode 1, ~1.7 MHz)
 
-All ADS1256 lines are on ONE board-edge row so a single connector carries them.
+All ADS1256 lines are on ONE board-edge row → a single connector carries them.
 
 | Coproc ESP32 | ADS1256 module |
 |---|---|
@@ -68,18 +68,16 @@ All ADS1256 lines are on ONE board-edge row so a single connector carries them.
 | GPIO19 | DOUT (MISO) |
 | GPIO5  | CS |
 | GPIO21 | DRDY |
-| GPIO22 | PDWN (hold HIGH) |
-| GPIO4  | RESET (hold HIGH) |
 | 3V3/5V | VCC (digital, per module spec) |
 | GND    | DGND |
 
-- These 7 pins all sit in the same header row (the free pins are 4/21/22; the
-  row's 16/17 go to the main-board UART, 1/3 are the USB console, 2 is the LED,
-  15 is a strap — keep clear of those).
-- **Optional simplification:** `PDWN` and `RESET` only ever sit HIGH, so you can
-  tie them straight to **3.3 V** and drop GPIO 22/4 — leaving the connector as
-  SCLK/DIN/DOUT/CS/DRDY + 3V3/GND. (Firmware then resets via the SPI `0xFE`
-  command instead of a hardware pulse.)
+- **`PDWN`/`RESET` are NOT wired.** This module doesn't break them out — it ties
+  them HIGH internally. The firmware resets the chip over SPI (the `0xFE`
+  command) at init, so no hardware RESET line is needed. (If your module *does*
+  expose them, just tie those module pins to 3.3 V — still no ESP GPIO needed.)
+- These 5 signal pins all sit in the same header row (free pins; the row's
+  16/17 go to the main-board UART, 1/3 are the USB console, 2 is the LED, 15 is
+  a strap — keep clear of those).
 - ADS1256 `SYNC` line (if broken out separately): tie HIGH.
 - (Classic-ESP32 pins shown; on an ESP32-S3 coproc avoid GPIO19/20.)
 

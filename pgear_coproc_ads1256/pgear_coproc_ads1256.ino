@@ -24,16 +24,15 @@
 // ---- coproc pinout (classic ESP32) -----------------------------------------
 #define PIN_UART_TX   17   // -> main UART2 RX (GPIO44)
 #define PIN_UART_RX   16   // <- main UART2 TX (GPIO43)
-// All ADS1256 lines kept on ONE board-edge row (single connector):
-//   row free pins are 4, 21, 22 (16/17=UART-to-main, 1/3=USB console,
-//   2=LED, 15=strap are already used). SPI stays on 5/18/19/23.
+// ADS1256 lines on ONE board-edge row (single connector). PDWN/RESET are NOT
+// wired: this module doesn't break them out (it ties them HIGH internally), so
+// we reset over SPI (0xFE) instead of a hardware pulse. Connector = SCLK, DIN,
+// DOUT, CS, DRDY + 3V3 + GND.
 #define PIN_ADS_SCLK  18
 #define PIN_ADS_MOSI  23   // DIN
 #define PIN_ADS_MISO  19   // DOUT
 #define PIN_ADS_CS     5
 #define PIN_ADS_DRDY  21   // input (active low)   — moved from 25
-#define PIN_ADS_PDWN  22   // hold HIGH (or tie 3V3) — moved from 33
-#define PIN_ADS_RESET  4   // hold HIGH / pulse low  — moved from 32
 #define PIN_LED        2   // onboard heartbeat/status LED
 
 // ---- ADS1256 commands / registers ------------------------------------------
@@ -147,12 +146,18 @@ static int32_t ads_read_channel(uint8_t mux) {
 static void ads_init() {
   pinMode(PIN_ADS_CS, OUTPUT);   ads_cs(false);
   pinMode(PIN_ADS_DRDY, INPUT);
-  pinMode(PIN_ADS_PDWN, OUTPUT);  digitalWrite(PIN_ADS_PDWN, HIGH);
-  pinMode(PIN_ADS_RESET, OUTPUT);
-  digitalWrite(PIN_ADS_RESET, LOW); delay(5);
-  digitalWrite(PIN_ADS_RESET, HIGH); delay(50);
+  delay(50);                            // allow the chip's power-on reset
 
   SPI.begin(PIN_ADS_SCLK, PIN_ADS_MISO, PIN_ADS_MOSI, PIN_ADS_CS);
+
+  // Software reset over SPI (no hardware RESET pin on this module).
+  SPI.beginTransaction(ADS_SPI);
+  ads_cs(true);
+  SPI.transfer(ADS_CMD_RESET);          // 0xFE
+  ads_cs(false);
+  SPI.endTransaction();
+  delay(50);                            // reset completes; DRDY then toggles
+
   SPI.beginTransaction(ADS_SPI);
   ads_cs(true);
   SPI.transfer(ADS_CMD_SDATAC);
