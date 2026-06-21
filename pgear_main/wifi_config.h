@@ -4,8 +4,8 @@
 // ============================================================================
 #pragma once
 
-#define WIFI_SSID      "pgear-hotspot"   // <-- your hotspot SSID
-#define WIFI_PASSWORD  "changeme"        // <-- your hotspot password
+#define WIFI_SSID      "PGEAR_TUNING"    // (from v7.1.5 LOG_SSID)
+#define WIFI_PASSWORD  "pgearpgear"      // (from v7.1.5 LOG_PASSWORD)
 
 // Telemetry: LogPacket broadcast over UDP (loss-tolerant). pgear_udp_logger.py
 // listens on this port.
