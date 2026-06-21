@@ -71,13 +71,14 @@ All ADS1256 lines are on ONE board-edge row → a single connector carries them.
 | 3V3/5V | VCC (digital, per module spec) |
 | GND    | DGND |
 
-- **`PDWN`/`RESET` are NOT wired.** This module doesn't break them out — it ties
-  them HIGH internally. The firmware resets the chip over SPI (the `0xFE`
-  command) at init, so no hardware RESET line is needed. (If your module *does*
-  expose them, just tie those module pins to 3.3 V — still no ESP GPIO needed.)
-- These 5 signal pins all sit in the same header row (free pins; the row's
-  16/17 go to the main-board UART, 1/3 are the USB console, 2 is the LED, 15 is
-  a strap — keep clear of those).
+- Module = **LC Technology ADS1256 v1.1**. **`PDWN` is present → tie it to
+  3.3 V on the module** (jumper to the adjacent VCC/3V3 pad) so it sits in run
+  mode. No ESP GPIO is used for it — we never power the ADS down in software.
+- **`RESET` is not broken out** on this module → the firmware resets over SPI
+  (the `0xFE` command) at init; no hardware RESET line needed.
+- So the ESP-side connector is just these **5 signal pins + 3V3 + GND**, all in
+  the same header row (free pins; the row's 16/17 go to the main-board UART,
+  1/3 are the USB console, 2 is the LED, 15 is a strap — keep clear of those).
 - ADS1256 `SYNC` line (if broken out separately): tie HIGH.
 - (Classic-ESP32 pins shown; on an ESP32-S3 coproc avoid GPIO19/20.)
 

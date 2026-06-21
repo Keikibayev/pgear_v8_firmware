@@ -24,10 +24,10 @@
 // ---- coproc pinout (classic ESP32) -----------------------------------------
 #define PIN_UART_TX   17   // -> main UART2 RX (GPIO44)
 #define PIN_UART_RX   16   // <- main UART2 TX (GPIO43)
-// ADS1256 lines on ONE board-edge row (single connector). PDWN/RESET are NOT
-// wired: this module doesn't break them out (it ties them HIGH internally), so
-// we reset over SPI (0xFE) instead of a hardware pulse. Connector = SCLK, DIN,
-// DOUT, CS, DRDY + 3V3 + GND.
+// ADS1256 lines on ONE board-edge row (single connector). Module = LC Tech
+// ADS1256 v1.1: PDWN is present -> tie it to 3.3V on the module (run mode), no
+// ESP GPIO; RESET is not broken out -> reset over SPI (0xFE) at init. So the
+// ESP connector = SCLK, DIN, DOUT, CS, DRDY + 3V3 + GND.
 #define PIN_ADS_SCLK  18
 #define PIN_ADS_MOSI  23   // DIN
 #define PIN_ADS_MISO  19   // DOUT
