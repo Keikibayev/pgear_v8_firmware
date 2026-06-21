@@ -63,8 +63,8 @@ so there is no wired-USB PC link in normal operation (USB only for flashing).
 Phase 4 host link: **UDP** for telemetry/logging (loss-tolerant `LogPacket`)
 + a **reliable channel (TCP or UDP+ACK)** for commands + a **link-loss
 watchdog** (PC heartbeat gone ~1 s → ESP32 auto-ramps to safe hold). Safety
-note: real E-STOP + limits are HARDWARE (button + ODrive GPIO endstops), never
-dependent on WiFi.
+note: real E-STOP is HARDWARE (button + motor-power cutoff), never dependent on
+WiFi. (NO ODrive endstops in this build — see below.)
 
 ## Bench-verify Phase 2
 With CAN verified (Phase 1) and the empty exo on the bench: open the serial
