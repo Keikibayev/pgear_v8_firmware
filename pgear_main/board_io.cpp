@@ -22,7 +22,7 @@ bool board_io_init() {
   }
   s_exp->init();
   s_exp->begin();
-  s_exp->enableAllIO_Output();   // EXIO0..7 as outputs (Waveshare pattern)
+  s_exp->pinMode(EXIO_USB_SEL, OUTPUT);   // EXIO5 as output (CAN/USB select)
   Serial.println("[board_io] CH422G up");
   return true;
 }

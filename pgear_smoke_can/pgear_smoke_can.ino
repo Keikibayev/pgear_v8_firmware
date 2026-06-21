@@ -66,7 +66,7 @@ void setup() {
       (i2c_port_t)I2C_NUM_0, ESP_IO_EXPANDER_I2C_CH422G_ADDRESS, 9, 8);
   exp->init();
   exp->begin();
-  exp->enableAllIO_Output();
+  exp->pinMode(EXIO_USB_SEL, OUTPUT);
   exp->digitalWrite(EXIO_USB_SEL, HIGH);
   Serial.println("[smoke_can] EXIO5=HIGH -> CAN mode");
 
