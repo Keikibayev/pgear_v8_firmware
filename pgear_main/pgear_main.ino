@@ -23,6 +23,8 @@
 #include "host_link.h"      // [Phase 4] WiFi: UDP telemetry + TCP commands
 #include "safety.h"         // [Phase 5] e-stop, hb watchdog, envelope clamp, sensor wd
 #include "control.h"        // [Phase 6] pos-mode AAN + torque-mode impedance
+#include "modes.h"          // [Phase 7] Jog / Teach-ROM / Observe
+#include "status_screen.h"  // [Phase 8] optional on-device text status (default off)
 #include "wifi_config.h"    // HOST_TELEM_HZ
 #include <string.h>
 
@@ -65,6 +67,8 @@ static GaitEngine   g_engine;
 static TorqueState  g_torque;     // [Phase 6b] torque-mode controller state
 static PatientTorque g_patient;   // shared patient-torque estimate
 volatile float      g_aanFactor = 1.0f;
+volatile uint8_t    g_setupMode = SETUP_NONE;   // [Phase 7] jog/teach/observe
+static ModeState    g_modeState;
 
 // ---- run-state orchestration (executed on the control core) ----------------
 static void armDrives() {
@@ -86,6 +90,7 @@ static void armDrives() {
 
 static void disarmDrives() {
   g_running = false;
+  g_setupMode = SETUP_NONE;
   g_engine.go_idle();
   can_idle_all();
   g_armed = false;
@@ -94,6 +99,7 @@ static void disarmDrives() {
 
 static void doEstop() {
   g_running = false;
+  g_setupMode = SETUP_NONE;
   g_engine.go_idle();
   can_idle_all();
   g_armed = false;
@@ -108,6 +114,7 @@ static void handlePendingCmd() {
   switch (c) {
     case CMD_ARM:    if (!g_estop) armDrives(); break;
     case CMD_RUN:    if (g_armed) {
+                       g_setupMode = SETUP_NONE;   // gait/torque preempts setup modes
                        if (g_controlMode == MODE_TORQUE) {
                          g_torque.phase01 = 0.0f; g_running = true;
                          Serial.println("[ctrl] RUN (torque)");
@@ -220,7 +227,19 @@ static void dispatchCommand(const CommandPacket& c) {
                             JointCoeffs jc; memcpy(&jc, c.payload, sizeof(JointCoeffs));
                             calib_load_coeffs(&jc);
                           } break;
-    // OP_SET_BW/DIR, JOG_*, TEACH_*, OBSERVE_*, CAL_*, TRIM_*, SWEEP_* : Phase 6/7
+    // ---- setup modes [Phase 7] (mutually exclusive with gait/torque) -------
+    case OP_JOG_ENABLE:   g_running = false;
+                          g_setupMode = (c.len >= 1 && c.payload[0]) ? SETUP_JOG : SETUP_NONE;
+                          break;
+    case OP_JOG_TARGET:   modes_set_jog_target(&g_modeState, c.joint, payload_f32(c, 0), &g_engine);
+                          break;
+    case OP_TEACH_START:  g_running = false; modes_reset_capture(&g_modeState);
+                          g_setupMode = SETUP_TEACH; break;
+    case OP_OBSERVE_START:g_running = false; modes_reset_capture(&g_modeState);
+                          g_setupMode = SETUP_OBSERVE; break;   // motors off
+    case OP_TEACH_STOP:
+    case OP_OBSERVE_STOP: g_setupMode = SETUP_NONE; break;
+    // OP_SET_BW/DIR, CAL_*, TRIM_*, SWEEP_* : driven from the PC; not on-chip
     default: break;
   }
 }
@@ -261,7 +280,15 @@ static void controlTask(void *arg) {
       subdiv = 0;
       control_patient_torque(&snap, &cd, &g_engine, &g_patient);  // shared estimate
 
-      if (g_controlMode == MODE_TORQUE) {
+      if (g_setupMode != SETUP_NONE) {
+        // [Phase 7] setup modes preempt gait/torque
+        switch (g_setupMode) {
+          case SETUP_JOG:     modes_jog_tick(&g_engine, &g_modeState, g_armed); break;
+          case SETUP_TEACH:   modes_teach_tick(&g_engine, &snap, &g_modeState, g_armed); break;
+          case SETUP_OBSERVE: modes_observe_tick(&g_engine, &snap, &g_modeState); break;
+          default: break;
+        }
+      } else if (g_controlMode == MODE_TORQUE) {
         // [6b] impedance: runs whenever ARMED (gravity-comp hold/float when not
         // running; walks when running). No homing — STOP just stops the phase.
         if (g_armed) {
@@ -324,6 +351,7 @@ void setup() {
   coproc_link_init();                // [Phase 3] ADS1256 coproc on UART2 (43/44)
 #endif
   host_link_init();                  // [Phase 4] WiFi STA: UDP telemetry + TCP cmds
+  status_screen_init();              // [Phase 8] on-device text status (no-op if off)
 
   xTaskCreatePinnedToCore(controlTask, "control", 8192, nullptr,
                           configMAX_PRIORITIES - 2, nullptr, CTRL_CORE);
@@ -386,6 +414,19 @@ void loop() {
     lastTelem = now;
     LogPacket lp; build_logpacket(&lp);
     host_link_send_telemetry((const uint8_t*)&lp, sizeof(lp));
+
+    // Teach/Observe: also stream the captured ROM so the GUI can apply it.
+    if (g_setupMode == SETUP_TEACH || g_setupMode == SETUP_OBSERVE) {
+      CaptureRangePacket cap; cap.start0 = 0xBB; cap.start1 = 0x77;
+      cap.mode = g_setupMode; cap.validMask = 0;
+      for (int i = 0; i < PG_NJOINTS; i++) {
+        cap.minDeg[i] = g_modeState.cap_min_deg[i];
+        cap.maxDeg[i] = g_modeState.cap_max_deg[i];
+        if (g_modeState.cap_valid[i]) cap.validMask |= (1 << i);
+      }
+      cap.crc = pg_crc16_ccitt((const uint8_t*)&cap, sizeof(cap) - 2);
+      host_link_send_telemetry((const uint8_t*)&cap, sizeof(cap));
+    }
   }
 
   if (now - lastStatus >= 500) {
@@ -417,6 +458,14 @@ void loop() {
                     a.pos_turns, a.vel_turns_s, a.iq_measured_a, (int)a.fb_valid);
 #endif
     }
-    // --- TODO P4: build + emit LogPacket over WiFi-UDP; TCP commands.
+    // On-device status text (no-op unless USE_STATUS_SCREEN).
+    char sbuf[160];
+    snprintf(sbuf, sizeof(sbuf),
+             "P.GEAR v8\nWiFi: %s   E-STOP: %s\nstate: %s   mode: %s\nbus: %s",
+             host_link_wifi_up() ? "up" : "--", g_estop ? "ACTIVE" : "clear",
+             g_setupMode != SETUP_NONE ? "SETUP" : (g_running ? "RUN" : (g_armed ? "ARM" : "idle")),
+             g_controlMode == MODE_TORQUE ? "TORQUE" : "POS",
+             snap.bus_up ? "ok" : "--");
+    status_screen_update(sbuf);
   }
 }

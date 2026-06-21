@@ -44,8 +44,8 @@ coefficients via `OP_LOAD_COEFFS` (`JointCoeffs`). ESP32 only evaluates
 | **5** 🔨 | safety supervisor: HW e-stop GPIO, hb watchdog, **motor-turn envelope clamp (sole hard ROM limit — NO endstops)**, sensor rate/glitch, iq-vs-FUTEK cross-check | safe to strap a patient — bench-verify pending |
 | **6** 🔨 | `control.cpp`: pos-mode AAN (worst-joint phase-yield, assist thresholds, asymmetric LPF) + patient-torque from calib models | assist-as-needed on-chip — bench-verify pending |
 | **6b** 🔨 | torque-mode impedance law ported (`control_torque_step`: grav-comp + spring + damp + ROM wall + cooperation gate, cap+slew); mode-aware arm + envelope-overrun trip | compliant mode — bench-verify pending |
-| **7** | Jog / Teach-ROM / Observe modes | setup workflows |
-| **8** | status-screen polish; WiFi-UDP logger; kiosk/boot | field-ready |
+| **7** ✅ | `modes.{h,cpp}`: Jog (ROM-clamped targets), Teach-ROM (zero-stiffness follow + capture), Observe (read-only capture); `CaptureRangePacket` streams captured ROM to the GUI | setup workflows — bench-verify pending |
+| **8** 🔨 | `status_screen.{h,cpp}`: optional (default OFF) single-LVGL-label text status reusing v7.1.5 panel bring-up; device runs headless without it | on-device readout — bench-verify pending |
 
 ## CAN / USB routing — RESOLVED (verified vs Waveshare docs, Phase 1)
 On the ESP32-S3-Touch-LCD-7, CAN (TX=GPIO20, RX=GPIO19) **shares the native-USB

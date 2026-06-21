@@ -170,6 +170,19 @@ static_assert(sizeof(LogPacket) == 206, "LogPacket size (must stay 206 for udp l
 #define LP_FLAG_GAIT_AUTOPROG  (1 << 8)
 #define LP_FLAG_TORQUE_MODE    (1 << 9)   // 0 = position mode, 1 = torque mode
 
+// Captured ROM from Teach/Observe (ESP32 -> PC, UDP, same port). 0xBB 0x77.
+// Smaller than LogPacket so the old pgear_udp_logger.py (len>=206 check) ignores it.
+struct __attribute__((packed)) CaptureRangePacket {
+  uint8_t  start0;        // 0xBB
+  uint8_t  start1;        // 0x77
+  uint8_t  mode;          // SetupMode (1=jog,2=teach,3=observe)
+  uint8_t  validMask;     // bit i = joint i has a captured range
+  float    minDeg[PG_NJOINTS];
+  float    maxDeg[PG_NJOINTS];
+  uint16_t crc;
+};
+static_assert(sizeof(CaptureRangePacket) == 38, "CaptureRangePacket size");
+
 // ============================================================================
 // ③ COMMANDS  (PC -> ESP32, USB-CDC)
 //    0xCC 0x33. CRC-16/CCITT covers bytes [0 .. 4+len-1] (header + payload).

@@ -1,8 +1,8 @@
 // ============================================================================
 // calib.cpp — store + evaluate downloaded joint models.  [Phase 4]
-// ⚠ The sin/cos basis MUST match calibrator.py's fit convention. Verify deg-vs-
-// radians against fit_joint_model() before trusting AAN in Phase 6; coefficients
-// are meaningless if the basis differs. Implemented here as sin/cos of RADIANS.
+// Basis VERIFIED to match calibrator.py: fit_joint_model() / predict() both use
+// theta = np.radians(deg), column order [sin, cos, vel, sign(vel), 1] -> coef
+// [a_sin, b_cos, c_vel, d_signvel, e_bias]. Identical to the radians form below.
 // ============================================================================
 #include "calib.h"
 #include <math.h>

@@ -60,8 +60,14 @@ Code-side phase status lives in `PLAN.md`.
       :47000; GUI commands over TCP :47001; pull the link while running →
       controller auto-homes (watchdog).
 
+## Optional: on-device status screen (Phase 8, default OFF)
+- [ ] To enable: set `USE_STATUS_SCREEN 1`, and copy into the sketch from
+      v7.1.5: `esp_panel_board_custom_conf.h`, `lvgl_v8_port.{h,cpp}`; install
+      the **ESP32_Display_Panel** + **lvgl** libraries. Device runs fine headless
+      without it.
+
 ## Known code follow-ups (for the developer)
-- [ ] Verify `calib.cpp` predict() sin/cos basis (deg vs radians) matches
-      `calibrator.py` `fit_joint_model()` before trusting AAN (Phase 6).
+- [x] Verified `calib.cpp` sin/cos basis matches `calibrator.py` (both radians).
 - [ ] pi_gui supervisor adaptation: strip the control loop; send CommandPackets
-      over TCP; decode LogPacket over UDP; push profile coeffs via LOAD_COEFFS.
+      over TCP :47001; decode LogPacket over UDP :47000 + CaptureRangePacket
+      (0xBB77, 38 B) for Teach/Observe ROM; push profile coeffs via LOAD_COEFFS.
