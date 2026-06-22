@@ -51,8 +51,16 @@ void GaitEngine::tick(float dt_s, float out_turns[PG_NJOINTS], bool out_has[PG_N
     for (int i = 0; i < PG_NJOINTS; i++) {
       JointState& s = joints[i];
       if (!s.enabled) continue;
-      float target = gait_init_target_turns(s.init_pos_deg, s.home_offset_deg,
-                                            s.rom_min_deg, s.rom_max_deg, s.direction);
+      // Ramp to the GAIT phase-0 point at the *current* amplitude (not a fixed
+      // pose) so INIT scales with amplitude and flows seamlessly into GAIT — no
+      // overshoot, no jump at the INIT->GAIT handoff.
+      bool L = joint_is_left(i);
+      float amp = L ? amp_l : amp_r;
+      float amax = gait_max_amp_for_rom(JOINTS[i].kind, s.rom_min_deg, s.rom_max_deg);
+      if (amp > amax) amp = amax;
+      float raw = gait_target_deg(JOINTS[i].kind, L, 0.0f, amp);
+      float clamped = gait_clamp_to_rom(raw, s.rom_min_deg, s.rom_max_deg);
+      float target = gait_deg_to_motor_turns(clamped, s.direction);
       float start = init_from_turns_[i];
       float t = start + u * (target - start);
       s.last_ref_turns = t;
@@ -65,8 +73,14 @@ void GaitEngine::tick(float dt_s, float out_turns[PG_NJOINTS], bool out_has[PG_N
     for (int i = 0; i < PG_NJOINTS; i++) {
       JointState& s = joints[i];
       if (!s.enabled) continue;
-      float amp = joint_is_left(i) ? amp_l : amp_r;
-      float raw = gait_target_deg(JOINTS[i].kind, joint_is_left(i), phase01, amp);
+      bool L = joint_is_left(i);
+      // Clamp amplitude to what the joint's ROM allows, so the reference scales
+      // down smoothly instead of being flat-topped at the limit (which dwells +
+      // jerks). Adapts to live teach-ROM limits.
+      float amp = L ? amp_l : amp_r;
+      float amax = gait_max_amp_for_rom(JOINTS[i].kind, s.rom_min_deg, s.rom_max_deg);
+      if (amp > amax) amp = amax;
+      float raw = gait_target_deg(JOINTS[i].kind, L, phase01, amp);
       float clamped = gait_clamp_to_rom(raw, s.rom_min_deg, s.rom_max_deg);
       float t = gait_deg_to_motor_turns(clamped, s.direction);
       s.last_ref_turns = t;

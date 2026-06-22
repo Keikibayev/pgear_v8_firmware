@@ -101,11 +101,17 @@ void can_idle_all() {
 }
 
 void can_feed_watchdog() {
-  // Re-assert the DESIRED state (what we commanded), not the heartbeat-reported
-  // one — so feeding never clobbers a just-requested transition.
+  // Re-assert the DESIRED steady state ONLY when the axis isn't already there
+  // (per its latest heartbeat). Re-sending SET_AXIS_STATE(CLOSED_LOOP) every
+  // 100 ms makes ODrive re-run closed-loop ENTRY, which snaps input_pos back to
+  // the current encoder pos — fighting the gait command stream and jittering the
+  // motor at ~10 Hz. Sending only on a real mismatch still recovers an axis that
+  // dropped out (transient fault) without perturbing normal motion.
   for (int i = 0; i < PG_NJOINTS; i++) {
     uint8_t st = s_desired[i];
-    if (st == AXIS_IDLE || st == AXIS_CLOSED_LOOP) can_set_axis_state(i, st);
+    if (st != AXIS_IDLE && st != AXIS_CLOSED_LOOP) continue;
+    if (s_tel[i].axis_state == st) continue;     // already in desired state — leave it
+    can_set_axis_state(i, st);
   }
 }
 

@@ -30,6 +30,12 @@ float gait_ref_vel_deg_s(JointKind kind, bool is_left, float phase01, float amp,
 // Soft per-joint ROM clamp (joint-frame deg).
 float gait_clamp_to_rom(float deg, float rom_min, float rom_max);
 
+// Largest amplitude that keeps this joint's amp-scaled trajectory inside its
+// ROM (so the reference is never flat-topped by the clamp — flat-topping makes
+// the joint dwell at the limit and jerk = "move with pauses"). Adapts to the
+// live (teach-ROM) limits. Returns >= 0.
+float gait_max_amp_for_rom(JointKind kind, float rom_min, float rom_max);
+
 // Final stage: joint-frame deg -> signed motor turns (direction applied last).
 float gait_deg_to_motor_turns(float deg, int dir);
 

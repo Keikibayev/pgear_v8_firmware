@@ -59,6 +59,20 @@ float gait_clamp_to_rom(float deg, float rom_min, float rom_max) {
   return deg;
 }
 
+float gait_max_amp_for_rom(JointKind kind, float rom_min, float rom_max) {
+  const float* arr = (kind == KIND_HIP) ? HIP_DEG : KNEE_DEG;
+  float pmax = arr[0], pmin = arr[0];
+  for (int i = 1; i < PHASE_STEPS; i++) {
+    if (arr[i] > pmax) pmax = arr[i];
+    if (arr[i] < pmin) pmin = arr[i];
+  }
+  // amp must satisfy amp*pmax <= rom_max AND amp*pmin >= rom_min.
+  float amp = 1.0e6f;
+  if (pmax >  1.0e-6f) amp = fminf(amp, rom_max / pmax);
+  if (pmin < -1.0e-6f) amp = fminf(amp, rom_min / pmin);   // both negative -> positive
+  return amp < 0.0f ? 0.0f : amp;
+}
+
 float gait_deg_to_motor_turns(float deg, int dir) {
   return (float)dir * deg_to_turns(deg);
 }

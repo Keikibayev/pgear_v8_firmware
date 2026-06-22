@@ -34,6 +34,12 @@ bool host_link_get_command(CommandPacket* out) {
 
 void host_link_init() {
   WiFi.mode(WIFI_STA);
+  // Disable WiFi modem power-save. The default WIFI_PS_MIN_MODEM sleeps the
+  // radio between DTIM beacons and wakes periodically; those wakeups stall the
+  // chip enough to jitter the real-time control loop (visible as motor
+  // stutter/pauses that only happen in WiFi mode, never on USB-direct). Costs
+  // a little extra power; buys clean motion + low command latency.
+  WiFi.setSleep(false);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.printf("[host] joining '%s' ...\n", WIFI_SSID);
   uint32_t t0 = millis();
@@ -85,7 +91,8 @@ static void parse_cmd_byte(uint8_t b) {
 void host_link_poll() {
   if (WiFi.status() != WL_CONNECTED) {
     static uint32_t lastTry = 0;
-    if (millis() - lastTry > 3000) { lastTry = millis(); WiFi.begin(WIFI_SSID, WIFI_PASSWORD); }
+    if (millis() - lastTry > 3000) { lastTry = millis();
+      WiFi.setSleep(false); WiFi.begin(WIFI_SSID, WIFI_PASSWORD); }
     return;
   }
   if (!s_client || !s_client.connected()) {

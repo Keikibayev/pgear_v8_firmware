@@ -45,6 +45,8 @@ static const float    GAIT_DT_S      = 1.0f / (float)GAIT_STEP_HZ;
 // ---- Shared state (cross-core; expand into proper structs in later phases) --
 volatile uint32_t g_ctrlTicks   = 0;
 volatile uint16_t g_ctrlLoopUs  = 0;   // last control-loop exec time (-> LogPacket)
+volatile uint16_t g_ctrlLoopUsMax = 0; // peak control-loop time since last status (jitter probe)
+volatile bool     g_quiet       = false; // 'q' mutes the periodic [status] spam
 volatile bool     g_estop       = false;
 volatile bool     g_armed       = false;
 volatile bool     g_running     = false;
@@ -351,6 +353,7 @@ static void controlTask(void *arg) {
     g_ctrlTicks++;
 
     g_ctrlLoopUs = (uint16_t)(micros() - t0);
+    if (g_ctrlLoopUs > g_ctrlLoopUsMax) g_ctrlLoopUsMax = g_ctrlLoopUs;  // catch spikes
     vTaskDelayUntil(&lastWake, period);  // fixed-rate, jitter-bounded
   }
 }
@@ -406,8 +409,13 @@ void loop() {
       case 'r': g_pendingCmd = CMD_RUN;    break;
       case 's': g_pendingCmd = CMD_STOP;   break;
       case 'd': g_pendingCmd = CMD_DISARM; break;
+      case 'i': g_pendingCmd = CMD_DISARM; break;   // idle all axes (= disarm here)
       case 'e': g_pendingCmd = CMD_ESTOP;  break;
       case 'E': g_estop = false; Serial.println("[ctrl] estop cleared"); break;
+      case 'c': g_pendingCmd = CMD_FULLCAL; break;   // firmware-driven ODrive cal
+      case 'q': g_quiet = !g_quiet;                  // mute/unmute periodic [status]
+                Serial.printf("[status] periodic output %s\n", g_quiet ? "OFF (q to resume)" : "ON");
+                break;
       default: break;
     }
   }
@@ -463,30 +471,38 @@ void loop() {
     lastStatus = now;
     BusTelemetry snap;
     can_snapshot(&snap);
-    // --- TODO P8: render this to the on-device text status screen too.
-    Serial.printf("[status] t=%lu ticks=%lu loop=%u us estop=%d bus=%d "
-                  "armed=%d run=%d ph=%u p01=%.2f\n",
-                  (unsigned long)now, (unsigned long)g_ctrlTicks,
-                  (unsigned)g_ctrlLoopUs, (int)g_estop, (int)snap.bus_up,
-                  (int)g_armed, (int)g_running, (unsigned)g_engine.phase,
-                  g_engine.phase01);
+    // Peak control-loop time since last status (and reset). A jump here = the
+    // RT loop stalled (e.g. blocked CAN TX) -> motor jitter.
+    uint16_t lpmax = g_ctrlLoopUsMax; g_ctrlLoopUsMax = 0;
+    if (!g_quiet) {
+      Serial.printf("[status] t=%lu ticks=%lu loop=%u(max=%u)us heap=%lu "
+                    "estop=%d bus=%d armed=%d run=%d ph=%u p01=%.2f\n",
+                    (unsigned long)now, (unsigned long)g_ctrlTicks,
+                    (unsigned)g_ctrlLoopUs, (unsigned)lpmax,
+                    (unsigned long)ESP.getFreeHeap(), (int)g_estop, (int)snap.bus_up,
+                    (int)g_armed, (int)g_running, (unsigned)g_engine.phase,
+                    g_engine.phase01);
+      // TWAI controller health: tx_failed / bus_err / tx_queue climbing over
+      // time => CAN bus issue (termination / ACK / load), not the control loop.
+      can_dump_status("bus");
 #if USE_COPROC
-    CoprocData cd; coproc_get(&cd);
-    Serial.printf("   coproc online=%d age=%lu ms\n", (int)cd.online,
-                  (unsigned long)cd.ageMs);
+      CoprocData cd; coproc_get(&cd);
+      Serial.printf("   coproc online=%d age=%lu ms\n", (int)cd.online,
+                    (unsigned long)cd.ageMs);
 #endif
-    for (int i = 0; i < PG_NJOINTS; i++) {
-      const AxisTelemetry& a = snap.j[i];
+      for (int i = 0; i < PG_NJOINTS; i++) {
+        const AxisTelemetry& a = snap.j[i];
 #if USE_COPROC
-      Serial.printf("   %s n%u st=%u pos=%.2f vel=%.2f iq=%.2f tau=%.2f fb=%d\n",
-                    JOINTS[i].shortName, JOINTS[i].node_id, a.axis_state,
-                    a.pos_turns, a.vel_turns_s, a.iq_measured_a, cd.torqueNm[i],
-                    (int)a.fb_valid);
+        Serial.printf("   %s n%u st=%u pos=%.2f vel=%.2f iq=%.2f tau=%.2f fb=%d\n",
+                      JOINTS[i].shortName, JOINTS[i].node_id, a.axis_state,
+                      a.pos_turns, a.vel_turns_s, a.iq_measured_a, cd.torqueNm[i],
+                      (int)a.fb_valid);
 #else
-      Serial.printf("   %s n%u st=%u pos=%.2f vel=%.2f iq=%.2f fb=%d\n",
-                    JOINTS[i].shortName, JOINTS[i].node_id, a.axis_state,
-                    a.pos_turns, a.vel_turns_s, a.iq_measured_a, (int)a.fb_valid);
+        Serial.printf("   %s n%u st=%u pos=%.2f vel=%.2f iq=%.2f fb=%d\n",
+                      JOINTS[i].shortName, JOINTS[i].node_id, a.axis_state,
+                      a.pos_turns, a.vel_turns_s, a.iq_measured_a, (int)a.fb_valid);
 #endif
+      }
     }
     // On-device status text (no-op unless USE_STATUS_SCREEN).
     char sbuf[160];
