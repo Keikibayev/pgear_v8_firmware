@@ -48,6 +48,7 @@ volatile uint16_t g_ctrlLoopUs  = 0;   // last control-loop exec time (-> LogPac
 volatile bool     g_estop       = false;
 volatile bool     g_armed       = false;
 volatile bool     g_running     = false;
+volatile uint32_t g_fullcal_until_ms = 0;   // watchdog feed paused until this (FULL_CAL)
 
 // Pending operator command (set from comms core, consumed by control core so
 // all CAN TX stays on one core). TEMP bench control — replaced by CommandPacket
@@ -113,13 +114,15 @@ static void doFullCal() {
     Serial.println("[ctrl] FULL CAL refused — disarm/idle first");
     return;
   }
+  // Pause the watchdog re-assert so it can't clobber the cal request back to IDLE.
+  g_fullcal_until_ms = millis() + 30000;
   for (int i = 0; i < PG_NJOINTS; i++) {
     if (!g_engine.joints[i].enabled) continue;
     can_clear_errors(i);
     can_set_axis_state(i, AXIS_FULL_CAL);     // ODrive state 3
   }
   Serial.println("[ctrl] FULL CAL: ODrive calibration started (motor moves/beeps; "
-                 "save_configuration in odrivetool to persist)");
+                 "watchdog paused 30s; save_configuration in odrivetool to persist)");
 }
 
 static void handlePendingCmd() {
@@ -406,7 +409,7 @@ void loop() {
   // ODrive watchdog feed @ ~10 Hz (re-asserts known axis state).
   if (now - lastWdFeed >= (uint32_t)(1000.0f / ODRIVE_WD_FEED_HZ)) {
     lastWdFeed = now;
-    can_feed_watchdog();
+    if (now >= g_fullcal_until_ms) can_feed_watchdog();   // paused during FULL_CAL
 #if USE_COPROC
     coproc_send_downstream(0, g_estop);   // keep coproc fed: estop + tareSeq
 #endif

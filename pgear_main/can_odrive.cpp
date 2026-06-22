@@ -15,6 +15,13 @@ static volatile bool s_running = false;
 static TaskHandle_t  s_rxTask = nullptr;
 static const uint32_t HB_TIMEOUT_MS = 500;
 
+// Desired axis state per joint (what WE commanded). The watchdog re-asserts
+// THIS, not the heartbeat-reported state — otherwise a transient (e.g. just
+// after arm, or a FULL_CAL request) gets clobbered back to the stale state.
+// Only IDLE / CLOSED_LOOP are tracked; transient states (FULL_CAL) are not, so
+// the watchdog never re-triggers them.
+static uint8_t s_desired[PG_NJOINTS] = { AXIS_IDLE, AXIS_IDLE, AXIS_IDLE, AXIS_IDLE };
+
 // ---- id helpers ------------------------------------------------------------
 static inline uint32_t can_id(uint8_t node_id, uint8_t cmd) {
   return ((uint32_t)node_id << CAN_CMD_BITS) | cmd;
@@ -61,6 +68,12 @@ void can_set_axis_state(int idx, uint32_t state) {
   uint8_t d[8] = {0};
   put_u32(d, state);
   tx(idx, CMD_SET_AXIS_STATE, d, 8);
+  // Track only steady states the watchdog should hold; NOT transient ones like
+  // FULL_CALIBRATION_SEQUENCE (so the watchdog won't re-trigger or abort them).
+  if (idx >= 0 && idx < PG_NJOINTS &&
+      (state == AXIS_IDLE || state == AXIS_CLOSED_LOOP)) {
+    s_desired[idx] = (uint8_t)state;
+  }
 }
 
 void can_set_control_mode(int idx, uint32_t control_mode, uint32_t input_mode) {
@@ -88,12 +101,10 @@ void can_idle_all() {
 }
 
 void can_feed_watchdog() {
+  // Re-assert the DESIRED state (what we commanded), not the heartbeat-reported
+  // one — so feeding never clobbers a just-requested transition.
   for (int i = 0; i < PG_NJOINTS; i++) {
-    uint8_t st;
-    taskENTER_CRITICAL(&s_mux);
-    st = s_tel[i].axis_state;
-    taskEXIT_CRITICAL(&s_mux);
-    // Only kick axes we've actually heard from in a known good state.
+    uint8_t st = s_desired[i];
     if (st == AXIS_IDLE || st == AXIS_CLOSED_LOOP) can_set_axis_state(i, st);
   }
 }
