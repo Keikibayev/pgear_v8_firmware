@@ -31,11 +31,24 @@ Code-side phase status lives in `PLAN.md`.
 - [ ] **120 Ω CAN termination** at both bus ends (board jumper + far ODrive).
 
 ## Calibration / mechanical
-- [ ] Calibrate each FUTEK cell: the coproc `DEFAULT_CAL` (counts/N) is a
-      placeholder — hang a known load, use the `pgear_tools/coproc` tools, let
-      the coproc persist the scale (CalAdjust → NVS).
-- [ ] Set **`MOMENT_ARM_M[]`** in `constants.h` to your real load-cell→pivot
-      distances (per joint).
+- [ ] **Load-cell scale (counts-per-Nm).** The coproc `g_cal`/`DEFAULT_CAL` is a
+      placeholder. Procedure:
+      1. Flash `pgear_v8/pgear_coproc_calib/` to the coproc (streams tared cell
+         counts over USB serial).
+      2. Run `python -m pgear_pi.labs.loadcell_calib_gui` (from `pi_gui/`).
+      3. Isolate the cell (motor off / limb free), **Tare** at no load.
+      4. Apply a KNOWN torque `τ = F·r` with a dynamometer at distance `r` from
+         the joint axis (pull perpendicular); record CELL counts. Repeat at 2–3
+         levels, both directions.
+      5. Slope of counts-vs-τ = **`k` (counts per Nm)** per cell.
+      6. Write each `k` into `pgear_coproc_ads1256.ino` `g_cal[]` and set
+         **`MOMENT_ARM_M[]=1.0`** in `constants.h` (the scale now yields Nm
+         directly — no separate moment arm needed). Reflash.
+      - ⚠️ NVS caveat: stored `cal0..3` override the hardcoded `g_cal` — clear
+        NVS for a fresh hardcoded value. (Live PC-driven scale-adjust is not
+        wired yet; only `OP_TARE` is.)
+      - Note: load cells are READ-ONLY (cross-check/telemetry); control uses iq,
+        so this isn't required for torque mode / AAN.
 - [ ] Confirm **per-axis `Kt`** (torque_constant) in odrivetool; if axes differ,
       promote `JOINT_NM_PER_A` to per-joint. (Torque mode / AAN depend on it.)
 - [ ] Tighten **KR / HL / KL joint screws** (were loose) before trusting their
@@ -55,7 +68,8 @@ Code-side phase status lives in `PLAN.md`.
 - [ ] **Phase 2:** flash `pgear_main`, serial `a`(arm)→`r`(run) → empty exo
       walks (ph IDLE→INIT→GAIT, p01 cycling), `s` homes smoothly, no jerk.
 - [ ] **Phase 3:** set `USE_COPROC 1`, switch to UART2; confirm per-joint torque
-      in telemetry, tare works, cal-adjust persists.
+      in telemetry and that `OP_TARE` zeroes the cells. (Scale is set by the
+      load-cell calibration above; cells are read-only — control uses iq.)
 - [ ] **Phase 4:** join hotspot; confirm `pgear_udp_logger.py` sees LogPacket on
       :47000; GUI commands over TCP :47001; pull the link while running →
       controller auto-homes (watchdog).
