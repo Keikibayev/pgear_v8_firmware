@@ -48,3 +48,5 @@ void can_idle_all();
 void can_feed_watchdog();
 // telemetry (thread-safe copy)
 void can_snapshot(BusTelemetry* out);
+// diagnostics: print TWAI controller state + TX/RX/bus error counters
+void can_dump_status(const char* tag);

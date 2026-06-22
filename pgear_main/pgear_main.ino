@@ -121,6 +121,7 @@ static void doFullCal() {
     can_clear_errors(i);
     can_set_axis_state(i, AXIS_FULL_CAL);     // ODrive state 3
   }
+  can_dump_status("after FULL_CAL tx");   // tx_failed>0 or state!=1 => CAN TX problem
   Serial.println("[ctrl] FULL CAL: ODrive calibration started (motor moves/beeps; "
                  "watchdog paused 30s; save_configuration in odrivetool to persist)");
 }

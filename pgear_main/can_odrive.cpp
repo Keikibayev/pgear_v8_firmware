@@ -203,6 +203,17 @@ bool can_odrive_init() {
   return true;
 }
 
+void can_dump_status(const char* tag) {
+  twai_status_info_t s;
+  twai_get_status_info(&s);
+  // state: 0=STOPPED 1=RUNNING 2=BUS_OFF 3=RECOVERING
+  Serial.printf("[can] %s: state=%u tx_err=%u rx_err=%u tx_failed=%lu "
+                "bus_err=%lu tx_queue=%u\n",
+                tag, (unsigned)s.state, (unsigned)s.tx_error_counter,
+                (unsigned)s.rx_error_counter, (unsigned long)s.tx_failed_count,
+                (unsigned long)s.bus_error_count, (unsigned)s.msgs_to_tx);
+}
+
 void can_odrive_stop() {
   if (!s_running) return;
   can_idle_all();
