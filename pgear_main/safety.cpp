@@ -13,15 +13,20 @@ static uint32_t s_glitchWindowStart = 0;
 static int      s_glitchCount = 0;
 
 void safety_init() {
+#if USE_ESTOP_BUTTON
 #if ESTOP_ACTIVE_LOW
   pinMode(ESTOP_GPIO, INPUT_PULLUP);
 #else
   pinMode(ESTOP_GPIO, INPUT_PULLDOWN);
 #endif
+  Serial.printf("[safety] init: HW e-stop on GPIO%d; NO endstops (firmware envelope is the hard limit)\n",
+                ESTOP_GPIO);
+#else
+  Serial.println("[safety] init: *** HW E-STOP DISABLED (USE_ESTOP_BUTTON=0, dev only) *** "
+                 "wire an NC button + set 1 before patient use");
+#endif
   s_prevMs = millis();
   s_glitchWindowStart = millis();
-  Serial.printf("[safety] init (estop GPIO%d, NO endstops -> firmware envelope is the hard limit)\n",
-                ESTOP_GPIO);
 }
 
 bool safety_estop_pressed() {
@@ -50,8 +55,10 @@ bool safety_tick(bool armed, bool running,
   uint8_t hbErr = 0, crossCheck = 0;
   bool trip = false;
 
-  // 1) hardware E-STOP button (highest priority)
+  // 1) hardware E-STOP button (highest priority) — dev-disablable
+#if USE_ESTOP_BUTTON
   if (safety_estop_pressed()) trip = true;
+#endif
 
   // 2) ODrive heartbeat watchdog + position-envelope overrun — once armed.
   if (armed && snap) {

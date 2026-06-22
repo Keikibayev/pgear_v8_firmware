@@ -158,7 +158,13 @@ static constexpr float DRIVE_NM_PER_JOINT_NM = 1.0f / (GEAR_RATIO * KEF * GEAR_E
 #ifndef ESTOP_GPIO
 #define ESTOP_GPIO 6        // <-- VERIFY a free broken-out GPIO; NC button to GND
 #endif
-#define ESTOP_ACTIVE_LOW 1  // INPUT_PULLUP; pressed (open NC) reads HIGH=released
+#define ESTOP_ACTIVE_LOW 1  // INPUT_PULLUP; NC button: released=LOW, pressed/open=HIGH
+// DEV: with no E-STOP button wired, the INPUT_PULLUP pin floats HIGH and reads as
+// "pressed" -> latched e-stop. Keep 0 until an NC button is wired to GND; then set
+// 1 (an unwired/severed e-stop then fails safe to STOPPED). MUST be 1 for patient use.
+#ifndef USE_ESTOP_BUTTON
+#define USE_ESTOP_BUTTON 0
+#endif
 static constexpr float SENSOR_MAX_RATE_NM_PER_S   = 20.0f;  // glitch if exceeded
 static constexpr int   SENSOR_GLITCH_ESTOP_PER_S  = 50;     // glitches/s -> e-stop
 static constexpr float CROSSCHECK_DIVERGE_NM      = 8.0f;   // iq vs FUTEK warn
