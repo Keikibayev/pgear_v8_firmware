@@ -218,6 +218,7 @@ enum PgOpcode : uint8_t {
   OP_TARE,            // re-tare FUTEK cells (bumps coproc tareSeq)
   // calibration coefficient download (the numpy-split boundary)
   OP_LOAD_COEFFS,     // payload: JointCoeffs (see below)
+  OP_FULL_CAL,        // ODrive FULL_CALIBRATION_SEQUENCE on enabled axes (IDLE only)
 };
 
 enum PgControlMode : uint8_t { MODE_POSITION = 0, MODE_TORQUE = 1 };

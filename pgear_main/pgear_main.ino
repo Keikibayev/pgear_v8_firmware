@@ -52,7 +52,7 @@ volatile bool     g_running     = false;
 // Pending operator command (set from comms core, consumed by control core so
 // all CAN TX stays on one core). TEMP bench control — replaced by CommandPacket
 // in Phase 4.
-enum PgCmd { CMD_NONE = 0, CMD_ARM, CMD_RUN, CMD_STOP, CMD_DISARM, CMD_ESTOP };
+enum PgCmd { CMD_NONE = 0, CMD_ARM, CMD_RUN, CMD_STOP, CMD_DISARM, CMD_ESTOP, CMD_FULLCAL };
 volatile PgCmd g_pendingCmd = CMD_NONE;
 
 // Stored supervisor state (consumed by the control law in Phase 6).
@@ -107,6 +107,21 @@ static void doEstop() {
   Serial.println("[ctrl] *** E-STOP *** (all axes IDLE)");
 }
 
+// ODrive FULL_CALIBRATION_SEQUENCE on enabled axes — disarmed/idle only.
+static void doFullCal() {
+  if (g_estop || g_armed || g_running) {
+    Serial.println("[ctrl] FULL CAL refused — disarm/idle first");
+    return;
+  }
+  for (int i = 0; i < PG_NJOINTS; i++) {
+    if (!g_engine.joints[i].enabled) continue;
+    can_clear_errors(i);
+    can_set_axis_state(i, AXIS_FULL_CAL);     // ODrive state 3
+  }
+  Serial.println("[ctrl] FULL CAL: ODrive calibration started (motor moves/beeps; "
+                 "save_configuration in odrivetool to persist)");
+}
+
 static void handlePendingCmd() {
   PgCmd c = g_pendingCmd;
   if (c == CMD_NONE) return;
@@ -134,6 +149,7 @@ static void handlePendingCmd() {
                      } break;
     case CMD_DISARM: disarmDrives(); break;
     case CMD_ESTOP:  doEstop(); break;
+    case CMD_FULLCAL: doFullCal(); break;
     default: break;
   }
 }
@@ -231,6 +247,7 @@ static void dispatchCommand(const CommandPacket& c) {
                             JointCoeffs jc; memcpy(&jc, c.payload, sizeof(JointCoeffs));
                             calib_load_coeffs(&jc);
                           } break;
+    case OP_FULL_CAL:     g_pendingCmd = CMD_FULLCAL; break;   // ODrive motor cal
     // ---- setup modes [Phase 7] (mutually exclusive with gait/torque) -------
     case OP_JOG_ENABLE:   g_running = false;
                           g_setupMode = (c.len >= 1 && c.payload[0]) ? SETUP_JOG : SETUP_NONE;

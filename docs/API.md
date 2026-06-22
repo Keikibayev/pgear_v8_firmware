@@ -133,6 +133,7 @@ During Teach/Observe the device streams `CaptureRangePacket` (see §3).
 | `SWEEP_START`/`CANCEL` | 30/31 | — | patient passive-load characterization sweep | P |
 | `TARE` | 32 | — | re-zero the FUTEK load cells (via coproc) | D |
 | `LOAD_COEFFS` | 33 | `JointCoeffs` (36 B) | **download a fitted model to the device** | D |
+| `FULL_CAL` | 34 | — | ODrive `FULL_CALIBRATION_SEQUENCE` on enabled axes (**disarmed/idle only**; calibrates in RAM — `save_configuration` in odrivetool to persist) | D |
 
 `JointCoeffs` (36 B): `u8 joint, u8 kind(0=empty,1=patient_passive), 2 pad,
 f32 coef[5] (a·sinθ + b·cosθ + c·v + d·sign(v) + e, θ in radians),
