@@ -32,13 +32,15 @@ float control_pos_aan(float dt_s, const GaitEngine* eng, const PatientTorque* pt
 
 // Torque-mode impedance step. Advances its own phase via the cooperation gate;
 // fills out_motor_nm[i] (ODrive input_torque) for enabled joints. `started`
-// gates phase advance (false -> gravity-comp/float only).
+// gates phase advance (false -> gravity-comp/float only). `free_run` makes the
+// phase self-advance at cps (gate ignored, BENCH self-walk). `assist_gain`
+// scales the assist spring K_assist (the "go"); 1.0 = config defaults.
 struct TorqueState {
   float phase01 = 0.0f;
   float g_filt  = 1.0f;
   float prev_tau[PG_NJOINTS] = {0};
 };
-void control_torque_step(float dt_s, bool started, float cps_base,
-                         const BusTelemetry* snap, const CoprocData* cd,
+void control_torque_step(float dt_s, bool started, bool free_run, float assist_gain,
+                         float cps_base, const BusTelemetry* snap, const CoprocData* cd,
                          const GaitEngine* eng, TorqueState* st,
                          float out_motor_nm[PG_NJOINTS], bool out_has[PG_NJOINTS]);

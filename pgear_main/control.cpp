@@ -113,8 +113,8 @@ static float tq_rom_nm(const GaitEngine* eng, int i, float deg, float vel) {
   return 0.0f;
 }
 
-void control_torque_step(float dt_s, bool started, float cps_base,
-                         const BusTelemetry* snap, const CoprocData* cd,
+void control_torque_step(float dt_s, bool started, bool free_run, float assist_gain,
+                         float cps_base, const BusTelemetry* snap, const CoprocData* cd,
                          const GaitEngine* eng, TorqueState* st,
                          float out_motor_nm[PG_NJOINTS], bool out_has[PG_NJOINTS]) {
   (void)cd;
@@ -146,10 +146,12 @@ void control_torque_step(float dt_s, bool started, float cps_base,
   float alpha = (tc > 0.0f) ? (1.0f - expf(-dt_s / tc)) : 1.0f;
   st->g_filt += alpha * (g_raw - st->g_filt);
 
-  // advance shared phase (hold band; reverse only on sustained backward motion)
+  // advance shared phase (hold band; reverse only on sustained backward motion).
+  // free_run (BENCH) marches the phase at full cadence regardless of the gate.
   if (started) {
     float g = st->g_filt;
-    float g_phase = (g > TQ_GATE_HOLD_BAND) ? g : (g < TQ_REVERSE_ENABLE ? g : 0.0f);
+    float g_phase = free_run ? 1.0f
+                  : ((g > TQ_GATE_HOLD_BAND) ? g : (g < TQ_REVERSE_ENABLE ? g : 0.0f));
     st->phase01 += dt_s * cps_base * g_phase;
     while (st->phase01 >= 1.0f) st->phase01 -= 1.0f;
     while (st->phase01 < 0.0f)  st->phase01 += 1.0f;
@@ -166,7 +168,7 @@ void control_torque_step(float dt_s, bool started, float cps_base,
     float t_grav = tq_grav_nm(eng, i, deg);
     float err = clampf(ref - deg, -TQ_ASSIST_SAT_DEG, TQ_ASSIST_SAT_DEG);
     float kA = (JOINTS[i].kind == KIND_HIP) ? TQ_KASSIST_HIP_NM_DEG : TQ_KASSIST_KNEE_NM_DEG;
-    float t_assist = kA * err;
+    float t_assist = assist_gain * kA * err;   // assist_gain = the live "go" knob
     float bD = (JOINTS[i].kind == KIND_HIP) ? TQ_BDAMP_HIP_NM_S_DEG : TQ_BDAMP_KNEE_NM_S_DEG;
     float t_damp = -bD * vel;
     float t_rom = tq_rom_nm(eng, i, deg, vel);

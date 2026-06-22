@@ -135,6 +135,16 @@ During Teach/Observe the device streams `CaptureRangePacket` (see §3).
 | `LOAD_COEFFS` | 33 | `JointCoeffs` (36 B) | **download a fitted model to the device** | D |
 | `FULL_CAL` | 34 | — | ODrive `FULL_CALIBRATION_SEQUENCE` on enabled axes (**disarmed/idle only**; calibrates in RAM — `save_configuration` in odrivetool to persist) | D |
 
+### Torque-mode tunables (Phase 6b)
+| op | # | payload | effect | |
+|---|---|---|---|---|
+| `SET_TORQUE_ASSIST` | 35 | `f32` gain | live multiplier on the assist spring `K_assist` (the "go"); 1.0 = defaults, clamped [0,5] | D |
+| `SET_FREE_RUN` | 36 | `u8` 0/1 | 1 = torque-mode phase self-advances (BENCH self-walk, cooperation gate ignored); 0 = patient-led (default) | D |
+
+> Torque-mode telemetry already exposes the breakdown these knobs affect:
+> `cmdTorque` / `gravTerm` / `ffTerm` per joint (see §3). `ffTerm` is the
+> assist-spring contribution scaled by `SET_TORQUE_ASSIST`.
+
 `JointCoeffs` (36 B): `u8 joint, u8 kind(0=empty,1=patient_passive), 2 pad,
 f32 coef[5] (a·sinθ + b·cosθ + c·v + d·sign(v) + e, θ in radians),
 f32 residStdA, f32 calCps, f32 calAmp`.

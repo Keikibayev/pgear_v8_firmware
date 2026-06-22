@@ -219,6 +219,11 @@ enum PgOpcode : uint8_t {
   // calibration coefficient download (the numpy-split boundary)
   OP_LOAD_COEFFS,     // payload: JointCoeffs (see below)
   OP_FULL_CAL,        // ODrive FULL_CALIBRATION_SEQUENCE on enabled axes (IDLE only)
+  // torque-mode tunables (Phase 6b)
+  OP_SET_TORQUE_ASSIST, // float: multiplier on the assist spring K_assist (the
+                        // "go"); 1.0 = defaults, clamped [0,5]
+  OP_SET_FREE_RUN,    // uint8 0/1: 1 = torque-mode phase self-advances (BENCH
+                      // self-walk, gate ignored); 0 = patient-led (default)
 };
 
 enum PgControlMode : uint8_t { MODE_POSITION = 0, MODE_TORQUE = 1 };

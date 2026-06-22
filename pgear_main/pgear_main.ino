@@ -60,6 +60,8 @@ volatile PgCmd g_pendingCmd = CMD_NONE;
 volatile uint8_t g_controlMode = MODE_POSITION;
 volatile bool    g_aanEnabled  = false;
 volatile float   g_assistLevel = 0.5f;
+volatile float   g_torqueAssistGain = 1.0f;   // [6b] live K_assist multiplier (the "go")
+volatile bool    g_freeRun         = false;   // [6b] BENCH: torque phase self-advances
 volatile uint16_t g_logSeq     = 0;
 volatile uint8_t g_crossCheckFault = 0;
 volatile uint8_t g_hbErrorByte     = 0;
@@ -234,6 +236,9 @@ static void dispatchCommand(const CommandPacket& c) {
     case OP_SET_AMP_L:    g_engine.amp_l = payload_f32(c, 0); break;
     case OP_SET_ASSIST:   g_assistLevel  = payload_f32(c, 0); break;
     case OP_SET_AAN:      g_aanEnabled   = (c.len >= 1 && c.payload[0]); break;
+    case OP_SET_TORQUE_ASSIST: { float g = payload_f32(c, 0);
+                          g_torqueAssistGain = g < 0.0f ? 0.0f : (g > 5.0f ? 5.0f : g); } break;
+    case OP_SET_FREE_RUN: g_freeRun      = (c.len >= 1 && c.payload[0]); break;
     case OP_SET_ROM:      if (c.joint < PG_NJOINTS) {
                             g_engine.joints[c.joint].rom_min_deg = payload_f32(c, 0);
                             g_engine.joints[c.joint].rom_max_deg = payload_f32(c, 4);
@@ -318,8 +323,8 @@ static void controlTask(void *arg) {
         // running; walks when running). No homing — STOP just stops the phase.
         if (g_armed) {
           float mnm[PG_NJOINTS]; bool has[PG_NJOINTS];
-          control_torque_step(GAIT_DT_S, g_running, g_engine.cps,
-                              &snap, &cd, &g_engine, &g_torque, mnm, has);
+          control_torque_step(GAIT_DT_S, g_running, g_freeRun, g_torqueAssistGain,
+                              g_engine.cps, &snap, &cd, &g_engine, &g_torque, mnm, has);
           for (int i = 0; i < PG_NJOINTS; i++)
             if (has[i]) can_set_input_torque(i, mnm[i]);
         }
