@@ -22,8 +22,11 @@ void safety_init() {
   Serial.printf("[safety] init: HW e-stop on GPIO%d; NO endstops (firmware envelope is the hard limit)\n",
                 ESTOP_GPIO);
 #else
-  Serial.println("[safety] init: *** HW E-STOP DISABLED (USE_ESTOP_BUTTON=0, dev only) *** "
-                 "wire an NC button + set 1 before patient use");
+  Serial.println("[safety] init: HW e-stop button DISABLED (USE_ESTOP_BUTTON=0)");
+#endif
+#if !SAFETY_AUTO_ESTOP
+  Serial.println("[safety] *** AUTO E-STOP DISABLED (SAFETY_AUTO_ESTOP=0, dev only) *** "
+                 "no auto-trips; set 1 + wire e-stop before patient use");
 #endif
   s_prevMs = millis();
   s_glitchWindowStart = millis();
@@ -105,5 +108,8 @@ bool safety_tick(bool armed, bool running,
 
   if (out_crossCheck) *out_crossCheck = crossCheck;
   if (out_hbErr)      *out_hbErr = hbErr;
+#if !SAFETY_AUTO_ESTOP
+  trip = false;   // dev: automatic e-stop disabled (manual GUI/CMD e-stop still works)
+#endif
   return trip;
 }

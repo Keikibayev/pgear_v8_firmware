@@ -165,6 +165,13 @@ static constexpr float DRIVE_NM_PER_JOINT_NM = 1.0f / (GEAR_RATIO * KEF * GEAR_E
 #ifndef USE_ESTOP_BUTTON
 #define USE_ESTOP_BUTTON 0
 #endif
+// DEV master switch: 0 = NO automatic e-stop trips at all (button, heartbeat
+// watchdog, envelope overrun, sensor glitch). The manual GUI/CMD e-stop still
+// works. While 0 you can arm a partial rig (e.g. right leg only) without the
+// missing axes tripping. MUST be 1 (full safety) for any patient use.
+#ifndef SAFETY_AUTO_ESTOP
+#define SAFETY_AUTO_ESTOP 0
+#endif
 static constexpr float SENSOR_MAX_RATE_NM_PER_S   = 20.0f;  // glitch if exceeded
 static constexpr int   SENSOR_GLITCH_ESTOP_PER_S  = 50;     // glitches/s -> e-stop
 static constexpr float CROSSCHECK_DIVERGE_NM      = 8.0f;   // iq vs FUTEK warn
