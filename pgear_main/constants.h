@@ -147,6 +147,11 @@ static constexpr float TQ_ADAPT_ERR_SCALE_DEG   = 10.0f;  // lag for full assist
 static constexpr float TQ_ADAPT_K_UP            = 1.0f;   // grow rate on lag (TUNE)
 static constexpr float TQ_ADAPT_K_FORGET        = 1.0f;   // fade rate when keeping up (TUNE)
 static constexpr float TQ_ADAPT_FLOOR           = 0.15f;  // min fraction of therapist gain
+// Effort-based AAN: patient helping torque [Nm] that counts as fully "active"
+// (effort_need 0). Below it the device assists more; near 0 effort -> passive ->
+// the device also DRIVES the phase up to TQ_DRIVE_MAX of cadence.
+static constexpr float TQ_EFFORT_SCALE_NM       = 3.0f;   // helping torque for "active" (TUNE)
+static constexpr float TQ_DRIVE_MAX             = 1.0f;   // max cadence fraction driven when passive
 static constexpr float TQ_BDAMP_HIP_NM_S_DEG    = 0.02f;
 static constexpr float TQ_BDAMP_KNEE_NM_S_DEG   = 0.02f;
 static constexpr float TQ_ROM_MARGIN_DEG        = 4.0f;   // virtual-wall band

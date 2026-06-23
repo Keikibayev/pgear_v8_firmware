@@ -224,6 +224,8 @@ enum PgOpcode : uint8_t {
                         // "go"); 1.0 = defaults, clamped [0,5]
   OP_SET_FREE_RUN,    // uint8 0/1: 1 = torque-mode phase self-advances (BENCH
                       // self-walk, gate ignored); 0 = patient-led (default)
+  OP_SET_TORQUE_CAP,  // float: multiplier on the per-joint torque caps
+                      // (1.0 = safe defaults MAX_HIP/KNEE_TORQUE_NM)
 };
 
 enum PgControlMode : uint8_t { MODE_POSITION = 0, MODE_TORQUE = 1 };

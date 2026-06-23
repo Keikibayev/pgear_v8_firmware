@@ -64,6 +64,7 @@ volatile bool    g_aanEnabled  = false;
 volatile float   g_assistLevel = 0.5f;
 volatile float   g_torqueAssistGain = 1.0f;   // [6b] live K_assist multiplier (the "go")
 volatile bool    g_freeRun         = false;   // [6b] BENCH: torque phase self-advances
+volatile float   g_torqueCapMult   = 1.0f;    // [6b] live multiplier on per-joint torque caps
 volatile uint16_t g_logSeq     = 0;
 volatile uint8_t g_crossCheckFault = 0;
 volatile uint8_t g_hbErrorByte     = 0;
@@ -243,6 +244,8 @@ static void dispatchCommand(const CommandPacket& c) {
     case OP_SET_FREE_RUN: { bool fr = (c.len >= 1 && c.payload[0]);
                           if (!fr) g_torque.g_filt = 0.0f;  // re-earn cooperation on exit
                           g_freeRun = fr; } break;
+    case OP_SET_TORQUE_CAP: { float m = payload_f32(c, 0);
+                          g_torqueCapMult = m < 0.1f ? 0.1f : (m > 4.0f ? 4.0f : m); } break;
     case OP_SET_ROM:      if (c.joint < PG_NJOINTS) {
                             g_engine.joints[c.joint].rom_min_deg = payload_f32(c, 0);
                             g_engine.joints[c.joint].rom_max_deg = payload_f32(c, 4);
@@ -328,8 +331,8 @@ static void controlTask(void *arg) {
         if (g_armed) {
           float mnm[PG_NJOINTS]; bool has[PG_NJOINTS];
           control_torque_step(GAIT_DT_S, g_running, g_freeRun, g_aanEnabled,
-                              g_torqueAssistGain, g_engine.cps, &snap, &cd,
-                              &g_engine, &g_torque, mnm, has);
+                              g_torqueAssistGain, g_torqueCapMult, g_engine.cps,
+                              &snap, &cd, &g_patient, &g_engine, &g_torque, mnm, has);
           for (int i = 0; i < PG_NJOINTS; i++)
             if (has[i]) can_set_input_torque(i, mnm[i]);
         }

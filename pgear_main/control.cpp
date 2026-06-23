@@ -85,8 +85,9 @@ float control_pos_aan(float dt_s, const GaitEngine* eng, const PatientTorque* pt
 // ============================================================================
 // Torque-mode impedance (port of TorqueGaitController.step)
 // ============================================================================
-static float tq_cap(int i) {
-  return (JOINTS[i].kind == KIND_HIP) ? MAX_HIP_TORQUE_NM : MAX_KNEE_TORQUE_NM;
+static float tq_cap(int i, float mult) {
+  float base = (JOINTS[i].kind == KIND_HIP) ? MAX_HIP_TORQUE_NM : MAX_KNEE_TORQUE_NM;
+  return base * mult;     // mult = live GUI "torque cap x" (1.0 = safe defaults)
 }
 
 // static gravity-hold torque (joint frame): full exo + alpha*patient passive
@@ -114,9 +115,10 @@ static float tq_rom_nm(const GaitEngine* eng, int i, float deg, float vel) {
 }
 
 void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
-                         float assist_gain, float cps_base,
+                         float assist_gain, float cap_mult, float cps_base,
                          const BusTelemetry* snap, const CoprocData* cd,
-                         const GaitEngine* eng, TorqueState* st,
+                         const PatientTorque* pt, const GaitEngine* eng,
+                         TorqueState* st,
                          float out_motor_nm[PG_NJOINTS], bool out_has[PG_NJOINTS]) {
   (void)cd;
   for (int i = 0; i < PG_NJOINTS; i++) out_has[i] = false;
@@ -147,12 +149,44 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
   float alpha = (tc > 0.0f) ? (1.0f - expf(-dt_s / tc)) : 1.0f;
   st->g_filt += alpha * (g_raw - st->g_filt);
 
+  // cooperation factor: 1 when cooperating/forward, ->0 as the patient drives
+  // AGAINST the gait. Gates both the assist ramp and the device-drive below.
+  float coop = clampf((st->g_filt - TQ_REVERSE_ENABLE) / (0.0f - TQ_REVERSE_ENABLE),
+                      0.0f, 1.0f);
+
+  // EFFORT-based need: how little the patient contributes in the gait direction.
+  // help_i = gait_dir * patient_torque (>0 = pushing with the gait); effort_need
+  // is 1 when passive (no help), 0 when contributing >= TQ_EFFORT_SCALE_NM.
+  float help_sum = 0.0f; int help_n = 0;
+  for (int i = 0; i < PG_NJOINTS; i++) {
+    if (!eng->joints[i].enabled || !pt->valid[i]) continue;
+    bool L = joint_is_left(i);
+    float v_ref = gait_ref_vel_deg_s(JOINTS[i].kind, L, st->phase01,
+                                     L ? eng->amp_l : eng->amp_r, cps_base);
+    float gait_dir = (v_ref >= 0.0f) ? 1.0f : -1.0f;
+    help_sum += gait_dir * pt->nm[i];
+    help_n++;
+  }
+  // No baseline on any enabled joint -> can't measure effort -> fall back to
+  // error-only (effort_need 0), safer than assuming the patient is passive.
+  float effort_need = 0.0f;
+  if (help_n > 0)
+    effort_need = clampf(1.0f - (help_sum / (float)help_n) / TQ_EFFORT_SCALE_NM,
+                         0.0f, 1.0f);
+
   // advance shared phase (hold band; reverse only on sustained backward motion).
-  // free_run (BENCH) marches the phase at full cadence regardless of the gate.
+  // free_run (BENCH) marches at full cadence. With AAN on, the device also DRIVES
+  // a passive patient: advance up to TQ_DRIVE_MAX*cadence in proportion to how
+  // passive they are (effort_need), gated by cooperation so it never drives into
+  // a deviation. As the patient contributes, effort_need falls and they lead.
   if (started) {
     float g = st->g_filt;
-    float g_phase = free_run ? 1.0f
+    float gate_phase = free_run ? 1.0f
                   : ((g > TQ_GATE_HOLD_BAND) ? g : (g < TQ_REVERSE_ENABLE ? g : 0.0f));
+    float drive = (aan_on && !free_run) ? (effort_need * coop * TQ_DRIVE_MAX) : 0.0f;
+    // Drive only ADDS forward motion; never override a reversal (negative gate).
+    float g_phase = gate_phase;
+    if (gate_phase >= 0.0f && drive > gate_phase) g_phase = drive;
     st->phase01 += dt_s * cps_base * g_phase;
     while (st->phase01 >= 1.0f) st->phase01 -= 1.0f;
     while (st->phase01 < 0.0f)  st->phase01 += 1.0f;
@@ -182,7 +216,7 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
     float t_rom = tq_rom_nm(eng, i, deg, vel);
 
     float tau = t_grav + t_assist + t_damp + t_rom;
-    float cap = tq_cap(i);
+    float cap = tq_cap(i, cap_mult);
     tau = clampf(tau, -cap, cap);
     // slew-rate limit
     float step = TQ_TAU_RATE_NM_S * dt_s;
@@ -199,12 +233,11 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
   if (aan_on && started) {
     float lag = (lag_n > 0) ? (lag_sum / (float)lag_n) : 0.0f;
     float e_norm = clampf(lag / TQ_ADAPT_ERR_SCALE_DEG, 0.0f, 1.0f);
-    // Don't ramp assist UP while the patient is driving AGAINST the gait (e.g. a
-    // fall-avoidance reversal): gate the grow term by cooperation so a deliberate
-    // deviation isn't mistaken for "needs more help". The forget term still fades.
-    float coop = clampf((st->g_filt - TQ_REVERSE_ENABLE) / (0.0f - TQ_REVERSE_ENABLE),
-                        0.0f, 1.0f);
-    st->adapt += dt_s * (TQ_ADAPT_K_UP * e_norm * coop - TQ_ADAPT_K_FORGET * st->adapt);
+    // Need = the greater of "lagging the pattern" (error-based) and "not
+    // contributing" (effort-based). coop (above) suppresses growth during a
+    // deviation; the forget term still fades the assist when the patient leads.
+    float need = fmaxf(e_norm, effort_need);
+    st->adapt += dt_s * (TQ_ADAPT_K_UP * need * coop - TQ_ADAPT_K_FORGET * st->adapt);
     st->adapt = clampf(st->adapt, TQ_ADAPT_FLOOR, 1.0f);
   } else {
     st->adapt = 1.0f;
