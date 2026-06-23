@@ -98,17 +98,27 @@ void setup() {
 
 void loop() {
   static uint32_t next = 0;
+  static int64_t  acc[NCH] = {0, 0, 0, 0};   // sum of tared counts since last print
+  static uint32_t nAcc = 0;                   // samples in the current window
   while (Serial.available()) {
     int ch = Serial.read();
-    if (ch == 't' || ch == 'T') doTare();
+    if (ch == 't' || ch == 'T') { doTare(); for (int i = 0; i < NCH; i++) acc[i] = 0; nAcc = 0; }
     else if (ch == 'r' || ch == 'R') { for (int i = 0; i < NCH; i++) g_tare[i] = 0; Serial.println("# raw"); }
   }
+  // Sample as fast as the ADS1256 allows and accumulate; print the WINDOW MEAN
+  // at ~5 Hz. Averaging many samples filters the noise so the calibration value
+  // is steady and readable (vs the old raw 20 Hz spray).
   readAll();
+  for (int i = 0; i < NCH; i++) acc[i] += (g_raw[i] - g_tare[i]);
+  nAcc++;
   uint32_t now = millis();
-  if (now >= next) {                 // ~20 Hz
-    next = now + 50;
+  if (now >= next) {                 // ~5 Hz, filtered
+    next = now + 200;
+    uint32_t n = nAcc ? nAcc : 1;
     Serial.printf("%ld,%ld,%ld,%ld\n",
-                  (long)(g_raw[0] - g_tare[0]), (long)(g_raw[1] - g_tare[1]),
-                  (long)(g_raw[2] - g_tare[2]), (long)(g_raw[3] - g_tare[3]));
+                  (long)(acc[0] / (int64_t)n), (long)(acc[1] / (int64_t)n),
+                  (long)(acc[2] / (int64_t)n), (long)(acc[3] / (int64_t)n));
+    for (int i = 0; i < NCH; i++) acc[i] = 0;
+    nAcc = 0;
   }
 }

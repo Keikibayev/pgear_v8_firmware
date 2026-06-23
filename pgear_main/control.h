@@ -38,9 +38,14 @@ float control_pos_aan(float dt_s, const GaitEngine* eng, const PatientTorque* pt
 struct TorqueState {
   float phase01 = 0.0f;
   float g_filt  = 1.0f;
+  float adapt   = 1.0f;   // adaptive-assist factor [FLOOR,1] (AAN); 1 = full gain
   float prev_tau[PG_NJOINTS] = {0};
 };
-void control_torque_step(float dt_s, bool started, bool free_run, float assist_gain,
-                         float cps_base, const BusTelemetry* snap, const CoprocData* cd,
+// `aan_on` enables adaptive assist-as-needed: the assist gain (therapist ceiling)
+// is scaled by `st->adapt`, which grows on gait-tracking lag and fades when the
+// patient keeps up. When off, adapt is held at 1.0 (manual gain).
+void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
+                         float assist_gain, float cps_base,
+                         const BusTelemetry* snap, const CoprocData* cd,
                          const GaitEngine* eng, TorqueState* st,
                          float out_motor_nm[PG_NJOINTS], bool out_has[PG_NJOINTS]);

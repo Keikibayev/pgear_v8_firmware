@@ -239,8 +239,10 @@ static void dispatchCommand(const CommandPacket& c) {
     case OP_SET_ASSIST:   g_assistLevel  = payload_f32(c, 0); break;
     case OP_SET_AAN:      g_aanEnabled   = (c.len >= 1 && c.payload[0]); break;
     case OP_SET_TORQUE_ASSIST: { float g = payload_f32(c, 0);
-                          g_torqueAssistGain = g < 0.0f ? 0.0f : (g > 5.0f ? 5.0f : g); } break;
-    case OP_SET_FREE_RUN: g_freeRun      = (c.len >= 1 && c.payload[0]); break;
+                          g_torqueAssistGain = g < 0.0f ? 0.0f : (g > 10.0f ? 10.0f : g); } break;
+    case OP_SET_FREE_RUN: { bool fr = (c.len >= 1 && c.payload[0]);
+                          if (!fr) g_torque.g_filt = 0.0f;  // re-earn cooperation on exit
+                          g_freeRun = fr; } break;
     case OP_SET_ROM:      if (c.joint < PG_NJOINTS) {
                             g_engine.joints[c.joint].rom_min_deg = payload_f32(c, 0);
                             g_engine.joints[c.joint].rom_max_deg = payload_f32(c, 4);
@@ -325,8 +327,9 @@ static void controlTask(void *arg) {
         // running; walks when running). No homing — STOP just stops the phase.
         if (g_armed) {
           float mnm[PG_NJOINTS]; bool has[PG_NJOINTS];
-          control_torque_step(GAIT_DT_S, g_running, g_freeRun, g_torqueAssistGain,
-                              g_engine.cps, &snap, &cd, &g_engine, &g_torque, mnm, has);
+          control_torque_step(GAIT_DT_S, g_running, g_freeRun, g_aanEnabled,
+                              g_torqueAssistGain, g_engine.cps, &snap, &cd,
+                              &g_engine, &g_torque, mnm, has);
           for (int i = 0; i < PG_NJOINTS; i++)
             if (has[i]) can_set_input_torque(i, mnm[i]);
         }
@@ -402,6 +405,13 @@ void loop() {
 
   // TEMP bench control over the serial console (replaced by CommandPacket /
   // WiFi in Phase 4). One key per action; consumed on the control core.
+  // GUARDED: GPIO43/44 are shared between the CH343P console (UART switch =
+  // UART1) and the coproc (switch = UART2). In a coproc build the coproc's
+  // sensor stream lands on this same UART; reading it as keystrokes fires
+  // random commands (a stray 'c' -> repeated FULL_CAL, 's'/'e'/'d' -> kills a
+  // running cal). So only honor bench keys when the coproc is NOT on the bus —
+  // in coproc/production builds, drive everything over WiFi instead.
+#if !USE_COPROC
   while (Serial.available()) {
     int c = Serial.read();
     switch (c) {
@@ -419,6 +429,7 @@ void loop() {
       default: break;
     }
   }
+#endif  // !USE_COPROC
 
   // ODrive watchdog feed @ ~10 Hz (re-asserts known axis state).
   if (now - lastWdFeed >= (uint32_t)(1000.0f / ODRIVE_WD_FEED_HZ)) {
@@ -474,14 +485,19 @@ void loop() {
     // Peak control-loop time since last status (and reset). A jump here = the
     // RT loop stalled (e.g. blocked CAN TX) -> motor jitter.
     uint16_t lpmax = g_ctrlLoopUsMax; g_ctrlLoopUsMax = 0;
+    // Torque mode runs off its own phase (g_torque), not the position-mode state
+    // machine — report that so the status line isn't stuck at IDLE.
+    bool tq = (g_controlMode == MODE_TORQUE);
+    unsigned phv = tq ? (g_running ? (unsigned)PH_GAIT : (unsigned)PH_IDLE)
+                      : (unsigned)g_engine.phase;
+    float p01v = tq ? g_torque.phase01 : g_engine.phase01;
     if (!g_quiet) {
       Serial.printf("[status] t=%lu ticks=%lu loop=%u(max=%u)us heap=%lu "
-                    "estop=%d bus=%d armed=%d run=%d ph=%u p01=%.2f\n",
+                    "estop=%d bus=%d armed=%d run=%d ph=%u p01=%.2f adapt=%.2f\n",
                     (unsigned long)now, (unsigned long)g_ctrlTicks,
                     (unsigned)g_ctrlLoopUs, (unsigned)lpmax,
                     (unsigned long)ESP.getFreeHeap(), (int)g_estop, (int)snap.bus_up,
-                    (int)g_armed, (int)g_running, (unsigned)g_engine.phase,
-                    g_engine.phase01);
+                    (int)g_armed, (int)g_running, phv, p01v, g_torque.adapt);
       // TWAI controller health: tx_failed / bus_err / tx_queue climbing over
       // time => CAN bus issue (termination / ACK / load), not the control loop.
       can_dump_status("bus");

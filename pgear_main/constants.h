@@ -138,6 +138,15 @@ static constexpr float TQ_K_KNEE_FALLBACK_NM    = 0.5f;
 static constexpr float TQ_KASSIST_HIP_NM_DEG    = 0.08f;  // soft tracking spring
 static constexpr float TQ_KASSIST_KNEE_NM_DEG   = 0.05f;
 static constexpr float TQ_ASSIST_SAT_DEG        = 12.0f;
+// Adaptive assist-as-needed (torque mode, when AAN is on): the assist spring is
+// scaled by an "adapt" factor in [FLOOR,1] that GROWS when the leg lags the gait
+// pattern and FADES when the patient keeps up (assist-as-needed with forgetting).
+// Steady-state adapt ~= clamp(mean_lag/ERR_SCALE, FLOOR, 1); time const ~1/FORGET.
+// The therapist's assist gain is the CEILING; this fills FLOOR..ceiling by need.
+static constexpr float TQ_ADAPT_ERR_SCALE_DEG   = 10.0f;  // lag for full assist (TUNE)
+static constexpr float TQ_ADAPT_K_UP            = 1.0f;   // grow rate on lag (TUNE)
+static constexpr float TQ_ADAPT_K_FORGET        = 1.0f;   // fade rate when keeping up (TUNE)
+static constexpr float TQ_ADAPT_FLOOR           = 0.15f;  // min fraction of therapist gain
 static constexpr float TQ_BDAMP_HIP_NM_S_DEG    = 0.02f;
 static constexpr float TQ_BDAMP_KNEE_NM_S_DEG   = 0.02f;
 static constexpr float TQ_ROM_MARGIN_DEG        = 4.0f;   // virtual-wall band

@@ -113,8 +113,9 @@ static float tq_rom_nm(const GaitEngine* eng, int i, float deg, float vel) {
   return 0.0f;
 }
 
-void control_torque_step(float dt_s, bool started, bool free_run, float assist_gain,
-                         float cps_base, const BusTelemetry* snap, const CoprocData* cd,
+void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
+                         float assist_gain, float cps_base,
+                         const BusTelemetry* snap, const CoprocData* cd,
                          const GaitEngine* eng, TorqueState* st,
                          float out_motor_nm[PG_NJOINTS], bool out_has[PG_NJOINTS]) {
   (void)cd;
@@ -157,7 +158,13 @@ void control_torque_step(float dt_s, bool started, bool free_run, float assist_g
     while (st->phase01 < 0.0f)  st->phase01 += 1.0f;
   }
 
-  // per-joint torque law
+  // Effective assist gain = therapist ceiling * adaptive factor (last tick's;
+  // a 1-tick lag at 50 Hz is negligible). adapt is updated below from this
+  // tick's mean tracking lag.
+  float eff_gain = assist_gain * st->adapt;
+
+  // per-joint torque law (accumulate the gait-tracking lag for the AAN update)
+  float lag_sum = 0.0f; int lag_n = 0;
   for (int i = 0; i < PG_NJOINTS; i++) {
     if (!eng->joints[i].enabled) continue;
     bool L = joint_is_left(i);
@@ -167,8 +174,9 @@ void control_torque_step(float dt_s, bool started, bool free_run, float assist_g
 
     float t_grav = tq_grav_nm(eng, i, deg);
     float err = clampf(ref - deg, -TQ_ASSIST_SAT_DEG, TQ_ASSIST_SAT_DEG);
+    lag_sum += fabsf(err); lag_n++;
     float kA = (JOINTS[i].kind == KIND_HIP) ? TQ_KASSIST_HIP_NM_DEG : TQ_KASSIST_KNEE_NM_DEG;
-    float t_assist = assist_gain * kA * err;   // assist_gain = the live "go" knob
+    float t_assist = eff_gain * kA * err;      // adaptive (or full) assist spring
     float bD = (JOINTS[i].kind == KIND_HIP) ? TQ_BDAMP_HIP_NM_S_DEG : TQ_BDAMP_KNEE_NM_S_DEG;
     float t_damp = -bD * vel;
     float t_rom = tq_rom_nm(eng, i, deg, vel);
@@ -183,5 +191,22 @@ void control_torque_step(float dt_s, bool started, bool free_run, float assist_g
 
     out_motor_nm[i] = eng->joints[i].direction * tau * DRIVE_NM_PER_JOINT_NM;
     out_has[i] = true;
+  }
+
+  // Adaptive assist-as-needed (with forgetting): grow `adapt` when the leg lags
+  // the gait pattern, fade it when the patient keeps up. When AAN is off, hold
+  // at 1.0 so the therapist's gain is used directly.
+  if (aan_on && started) {
+    float lag = (lag_n > 0) ? (lag_sum / (float)lag_n) : 0.0f;
+    float e_norm = clampf(lag / TQ_ADAPT_ERR_SCALE_DEG, 0.0f, 1.0f);
+    // Don't ramp assist UP while the patient is driving AGAINST the gait (e.g. a
+    // fall-avoidance reversal): gate the grow term by cooperation so a deliberate
+    // deviation isn't mistaken for "needs more help". The forget term still fades.
+    float coop = clampf((st->g_filt - TQ_REVERSE_ENABLE) / (0.0f - TQ_REVERSE_ENABLE),
+                        0.0f, 1.0f);
+    st->adapt += dt_s * (TQ_ADAPT_K_UP * e_norm * coop - TQ_ADAPT_K_FORGET * st->adapt);
+    st->adapt = clampf(st->adapt, TQ_ADAPT_FLOOR, 1.0f);
+  } else {
+    st->adapt = 1.0f;
   }
 }

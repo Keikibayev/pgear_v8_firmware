@@ -138,7 +138,7 @@ During Teach/Observe the device streams `CaptureRangePacket` (see §3).
 ### Torque-mode tunables (Phase 6b)
 | op | # | payload | effect | |
 |---|---|---|---|---|
-| `SET_TORQUE_ASSIST` | 35 | `f32` gain | live multiplier on the assist spring `K_assist` (the "go"); 1.0 = defaults, clamped [0,5] | D |
+| `SET_TORQUE_ASSIST` | 35 | `f32` gain | live multiplier on the assist spring `K_assist` (the "go" / therapist assist ceiling); 1.0 = defaults, clamped [0,10] | D |
 | `SET_FREE_RUN` | 36 | `u8` 0/1 | 1 = torque-mode phase self-advances (BENCH self-walk, cooperation gate ignored); 0 = patient-led (default) | D |
 
 > Torque-mode telemetry already exposes the breakdown these knobs affect:
