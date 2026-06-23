@@ -90,8 +90,9 @@ static float tq_cap(int i, float mult) {
   return base * mult;     // mult = live GUI "torque cap x" (1.0 = safe defaults)
 }
 
-// static gravity-hold torque (joint frame): full exo + alpha*patient passive
-static float tq_grav_nm(const GaitEngine* eng, int i, float deg) {
+// static gravity-hold torque (joint frame): full exo + alpha*patient passive +
+// manual therapist limb-weight feed-forward.
+static float tq_grav_nm(const GaitEngine* eng, int i, float deg, float limb_hip_nm) {
   int dir = eng->joints[i].direction;
   float tau;
   if (calib_has(i, COEFF_EMPTY))
@@ -103,6 +104,13 @@ static float tq_grav_nm(const GaitEngine* eng, int i, float deg) {
   if (calib_has(i, COEFF_PATIENT_PASSIVE))
     tau += dir * JOINT_NM_PER_A * TQ_PATIENT_ASSIST_FRAC
          * calib_predict(i, COEFF_PATIENT_PASSIVE, deg, 0.0f);
+  // Manual limb-weight feed-forward (peak Nm at horizontal, therapist-set): for
+  // CP patients who can't relax to be characterized. Cancels the *constant* limb
+  // weight so the assist spring can reach the target; tone is left for the
+  // compliant AAN. HIP ONLY -- the knee's gravity couples to the hip angle
+  // (2-link), so sin(knee) alone is wrong; needs a coupled model (TODO).
+  if (JOINTS[i].kind == KIND_HIP)
+    tau += dir * limb_hip_nm * sinf(deg * (float)M_PI / 180.0f);
   return tau;
 }
 
@@ -115,8 +123,8 @@ static float tq_rom_nm(const GaitEngine* eng, int i, float deg, float vel) {
 }
 
 void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
-                         float assist_gain, float cap_mult, float cps_base,
-                         const BusTelemetry* snap, const CoprocData* cd,
+                         float assist_gain, float cap_mult, float limb_hip_nm,
+                         float cps_base, const BusTelemetry* snap, const CoprocData* cd,
                          const PatientTorque* pt, const GaitEngine* eng,
                          TorqueState* st,
                          float out_motor_nm[PG_NJOINTS], bool out_has[PG_NJOINTS]) {
@@ -206,7 +214,7 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
     float vel = jvel(eng, snap->j[i], i);
     float ref = gait_target_deg(JOINTS[i].kind, L, st->phase01, L ? eng->amp_l : eng->amp_r);
 
-    float t_grav = tq_grav_nm(eng, i, deg);
+    float t_grav = tq_grav_nm(eng, i, deg, limb_hip_nm);
     float err = clampf(ref - deg, -TQ_ASSIST_SAT_DEG, TQ_ASSIST_SAT_DEG);
     lag_sum += fabsf(err); lag_n++;
     float kA = (JOINTS[i].kind == KIND_HIP) ? TQ_KASSIST_HIP_NM_DEG : TQ_KASSIST_KNEE_NM_DEG;

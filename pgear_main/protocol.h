@@ -226,6 +226,8 @@ enum PgOpcode : uint8_t {
                       // self-walk, gate ignored); 0 = patient-led (default)
   OP_SET_TORQUE_CAP,  // float: multiplier on the per-joint torque caps
                       // (1.0 = safe defaults MAX_HIP/KNEE_TORQUE_NM)
+  OP_SET_LIMB_WEIGHT, // float: manual HIP limb-weight feed-forward, peak Nm at
+                      // horizontal (cancels patient leg weight w/o a passive model)
 };
 
 enum PgControlMode : uint8_t { MODE_POSITION = 0, MODE_TORQUE = 1 };
