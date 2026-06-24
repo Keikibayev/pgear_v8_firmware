@@ -172,7 +172,10 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
     float v_ref = gait_ref_vel_deg_s(JOINTS[i].kind, L, st->phase01,
                                      L ? eng->amp_l : eng->amp_r, cps_base);
     float gait_dir = (v_ref >= 0.0f) ? 1.0f : -1.0f;
-    help_sum += gait_dir * pt->nm[i];
+    // help>0 = the patient REDUCES the motor's required torque (genuinely
+    // assisting). A passive load / resistance INCREASES motor torque -> reads
+    // negative -> effort_need high -> the device assists MORE (correct).
+    help_sum -= gait_dir * pt->nm[i];
     help_n++;
   }
   // No baseline on any enabled joint -> can't measure effort -> fall back to
