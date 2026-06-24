@@ -49,9 +49,12 @@ struct TorqueState {
 // caps (live GUI control). When AAN is off, adapt is held at 1.0 (manual gain).
 // `limb_hip_nm` = manual hip limb-weight feed-forward (peak Nm), therapist-set,
 // for patients who can't be characterized. Cancels the constant limb weight.
+// `knee_assist_nm` = knee swing-assist feed-forward (constant Nm kick in the gait
+// swing direction; no knee gravity model needed).
 void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
                          float assist_gain, float cap_mult, float limb_hip_nm,
-                         float cps_base, const BusTelemetry* snap, const CoprocData* cd,
+                         float knee_assist_nm, float cps_base,
+                         const BusTelemetry* snap, const CoprocData* cd,
                          const PatientTorque* pt, const GaitEngine* eng,
                          TorqueState* st,
                          float out_motor_nm[PG_NJOINTS], bool out_has[PG_NJOINTS]);

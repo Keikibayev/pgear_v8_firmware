@@ -228,6 +228,8 @@ enum PgOpcode : uint8_t {
                       // (1.0 = safe defaults MAX_HIP/KNEE_TORQUE_NM)
   OP_SET_LIMB_WEIGHT, // float: manual HIP limb-weight feed-forward, peak Nm at
                       // horizontal (cancels patient leg weight w/o a passive model)
+  OP_SET_KNEE_ASSIST, // float: KNEE swing-assist feed-forward [Nm], constant kick
+                      // in the gait swing direction (no knee gravity model needed)
 };
 
 enum PgControlMode : uint8_t { MODE_POSITION = 0, MODE_TORQUE = 1 };

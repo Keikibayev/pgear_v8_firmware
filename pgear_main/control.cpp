@@ -124,7 +124,8 @@ static float tq_rom_nm(const GaitEngine* eng, int i, float deg, float vel) {
 
 void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
                          float assist_gain, float cap_mult, float limb_hip_nm,
-                         float cps_base, const BusTelemetry* snap, const CoprocData* cd,
+                         float knee_assist_nm, float cps_base,
+                         const BusTelemetry* snap, const CoprocData* cd,
                          const PatientTorque* pt, const GaitEngine* eng,
                          TorqueState* st,
                          float out_motor_nm[PG_NJOINTS], bool out_has[PG_NJOINTS]) {
@@ -227,6 +228,13 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
     float t_rom = tq_rom_nm(eng, i, deg, vel);
 
     float tau = t_grav + t_assist + t_damp + t_rom;
+    // Knee swing-assist feed-forward: a constant kick in the direction the gait
+    // is currently swinging the knee (no knee gravity model needed).
+    if (JOINTS[i].kind == KIND_KNEE && knee_assist_nm != 0.0f) {
+      float kv = gait_ref_vel_deg_s(KIND_KNEE, L, st->phase01,
+                                    L ? eng->amp_l : eng->amp_r, cps_base);
+      tau += knee_assist_nm * signf(kv);
+    }
     float cap = tq_cap(i, cap_mult);
     tau = clampf(tau, -cap, cap);
     // slew-rate limit
