@@ -84,7 +84,10 @@ static inline int joint_for_node(uint8_t node_id) {
 static constexpr float HIP_TURN_MIN = -6.0f, HIP_TURN_MAX = 8.0f;
 static constexpr float KNEE_TURN_MIN = -2.0f, KNEE_TURN_MAX = 10.0f;
 static constexpr float ABS_VEL_LIM = 25.0f, ABS_ACC_LIM = 200.0f, ABS_CUR_LIM = 20.0f;
-static constexpr float MAX_HIP_TORQUE_NM = 3.0f, MAX_KNEE_TORQUE_NM = 2.5f;
+// Base per-joint torque caps. The GUI "Torque cap x" (up to 10x) scales these,
+// so 10x = 100 Nm hip / 80 Nm knee. WARNING: 100 Nm at the hip is bench-lifting
+// territory — keep the cap x LOW (1x) for any patient.
+static constexpr float MAX_HIP_TORQUE_NM = 10.0f, MAX_KNEE_TORQUE_NM = 8.0f;
 
 // ---- FUTEK force -> joint torque (moment arm, applied on the MAIN side) -----
 // Coproc sends calibrated N per cell; main multiplies by the moment arm to get

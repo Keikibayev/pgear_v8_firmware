@@ -86,7 +86,7 @@ static void armDrives() {
     can_clear_errors(i);
     if (torque) can_set_control_mode(i, CM_TORQUE, IM_PASSTHROUGH);
     else        can_set_control_mode(i, CM_POSITION, IM_POS_FILTER); // bw provisioned
-    can_set_limits(i, ABS_VEL_LIM, 10.0f);                // bench-safe current cap
+    can_set_limits(i, ABS_VEL_LIM, 15.0f);                // current cap (~120 Nm/joint)
     can_set_axis_state(i, AXIS_CLOSED_LOOP);
   }
   // reset torque-mode state so it starts from the current pose
@@ -249,7 +249,7 @@ static void dispatchCommand(const CommandPacket& c) {
     case OP_SET_TORQUE_CAP: { float m = payload_f32(c, 0);
                           g_torqueCapMult = m < 0.1f ? 0.1f : (m > 10.0f ? 10.0f : m); } break;
     case OP_SET_LIMB_WEIGHT: { float w = payload_f32(c, 0);
-                          g_limbWeightHipNm = w < 0.0f ? 0.0f : (w > 30.0f ? 30.0f : w); } break;
+                          g_limbWeightHipNm = w < 0.0f ? 0.0f : (w > 100.0f ? 100.0f : w); } break;
     case OP_SET_KNEE_ASSIST: { float w = payload_f32(c, 0);
                           g_kneeAssistNm = w < -15.0f ? -15.0f : (w > 15.0f ? 15.0f : w); } break;
     case OP_SET_ROM:      if (c.joint < PG_NJOINTS) {
