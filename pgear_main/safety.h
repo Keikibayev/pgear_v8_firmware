@@ -6,7 +6,7 @@
 //   - ODrive heartbeat watchdog: an enabled+armed axis going stale -> trip
 //   - motor-turn ENVELOPE clamp on every commanded position (sole hard ROM net)
 //   - sensor watchdog: torque rate cap + glitch-rate -> trip
-//   - cross-check: iq-effort vs FUTEK torque divergence -> warn (bit), no trip
+//   - cross-check: iq-effort vs load cell torque divergence -> warn (bit), no trip
 // ============================================================================
 #pragma once
 #include <stdint.h>

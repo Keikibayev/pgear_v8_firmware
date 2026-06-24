@@ -97,7 +97,7 @@ bool safety_tick(bool armed, bool running,
     s_glitchWindowStart = now;
   }
 
-  // 4) cross-check iq-effort vs FUTEK torque — warn only (no trip)
+  // 4) cross-check iq-effort vs load cell torque — warn only (no trip)
   if (cd && cd->online && snap) {
     for (int i = 0; i < PG_NJOINTS; i++) {
       float iqTorque = snap->j[i].iq_measured_a * JOINT_NM_PER_A;

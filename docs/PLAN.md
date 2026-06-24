@@ -41,7 +41,7 @@ coefficients via `OP_LOAD_COEFFS` (`JointCoeffs`). ESP32 only evaluates
 | **2** 🔨 | `gait` + `gait_engine` ports + control-task integration + temp serial bench keys (a/r/s/d/e) | smooth motion, no jitter — bench-verify pending |
 | **3** 🔨 | ADS1256 coproc firmware + `coproc_link` (UART2/43/44) + force→torque fusion; wiring doc | torque sensing — bench-verify pending (`LogPacket` emit moves to P4/WiFi) |
 | **4** 🔨 | Firmware host link done: WiFi STA, UDP LogPacket telemetry, TCP CommandPacket server + dispatch, link-loss watchdog, calib coeff store/predict. **pi_gui supervisor adaptation (strip loop, send cmds/decode telem) still TODO** | host = pure pendant — bench-verify pending |
-| **5** 🔨 | safety supervisor: HW e-stop GPIO, hb watchdog, **motor-turn envelope clamp (sole hard ROM limit — NO endstops)**, sensor rate/glitch, iq-vs-FUTEK cross-check | safe to strap a patient — bench-verify pending |
+| **5** 🔨 | safety supervisor: HW e-stop GPIO, hb watchdog, **motor-turn envelope clamp (sole hard ROM limit — NO endstops)**, sensor rate/glitch, iq-vs-load cell cross-check | safe to strap a patient — bench-verify pending |
 | **6** 🔨 | `control.cpp`: pos-mode AAN (worst-joint phase-yield, assist thresholds, asymmetric LPF) + patient-torque from calib models | assist-as-needed on-chip — bench-verify pending |
 | **6b** 🔨 | torque-mode impedance law ported (`control_torque_step`: grav-comp + spring + damp + ROM wall + cooperation gate, cap+slew); mode-aware arm + envelope-overrun trip | compliant mode — bench-verify pending |
 | **7** ✅ | `modes.{h,cpp}`: Jog (ROM-clamped targets), Teach-ROM (zero-stiffness follow + capture), Observe (read-only capture); `CaptureRangePacket` streams captured ROM to the GUI | setup workflows — bench-verify pending |

@@ -1,7 +1,7 @@
 # P.GEAR v8 — wiring between units
 
 Five units: **PC** (WiFi), **Main controller** (ESP32-S3-Touch-LCD-7),
-**Coproc** (ESP32 + ADS1256), **2× ODrive**, **4× FUTEK load cell**.
+**Coproc** (ESP32 + ADS1256), **2× ODrive**, **4× load cell load cell**.
 
 ```
             WiFi hotspot
@@ -14,7 +14,7 @@ Five units: **PC** (WiFi), **Main controller** (ESP32-S3-Touch-LCD-7),
                                            |  SPI
                                         [ADS1256]
                                         | | | |  (4 differential bridges)
-                                     [FUTEK x4 load cells]
+                                     [load cell x4 load cells]
 ```
 
 > Common ground everywhere: tie GND of Main, Coproc, ADS1256, ODrives, and the
@@ -82,9 +82,9 @@ All ADS1256 lines are on ONE board-edge row → a single connector carries them.
 - ADS1256 `SYNC` line (if broken out separately): tie HIGH.
 - (Classic-ESP32 pins shown; on an ESP32-S3 coproc avoid GPIO19/20.)
 
-## 4. ADS1256 ↔ 4× FUTEK load cells — analog bridges
+## 4. ADS1256 ↔ 4× load cell load cells — analog bridges
 
-Each FUTEK is a strain-gauge **Wheatstone bridge** (4-wire): EXC+, EXC-,
+Each load cell is a strain-gauge **Wheatstone bridge** (4-wire): EXC+, EXC-,
 SIG+, SIG-. The ADS1256 PGA (×64) reads the bridge directly — no separate
 amplifier. Wire each cell to one **differential pair**:
 
@@ -101,7 +101,7 @@ amplifier. Wire each cell to one **differential pair**:
 - Channel→joint order matches the canonical **0=R-hip, 1=R-knee, 2=L-hip,
   3=L-knee** so `MOMENT_ARM_M[]` and the GUI line up. Sign may invert per cell
   — fix with a negative `CalAdjust` ratio after calibration.
-- FUTEK wire colors vary by model — confirm EXC/SIG from its datasheet.
+- load cell wire colors vary by model — confirm EXC/SIG from its datasheet.
 
 ## 5. PC ↔ everything — WiFi (no wires)
 

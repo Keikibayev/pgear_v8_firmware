@@ -12,7 +12,7 @@ v7.1.5 tree stays as bibliography (its packet protocol is lifted here).
 ## Architecture (Option C)
 
 ```
-   FUTEK x4 ──▶ ADS1256 ──▶ [coproc ESP32] ──UART(calibrated N)──▶ [ESP32-S3 main]
+   load cell x4 ──▶ ADS1256 ──▶ [coproc ESP32] ──UART(calibrated N)──▶ [ESP32-S3 main]
                                                                       │  ▲
                                                   CAN/TWAI (250 kbps) │  │ telemetry
                                                                       ▼  │

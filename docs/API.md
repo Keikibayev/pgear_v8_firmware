@@ -131,7 +131,7 @@ During Teach/Observe the device streams `CaptureRangePacket` (see §3).
 | `CAL_START`/`CANCEL` | 25/26 | — | empty-exo baseline sweep (collect on bridge, fit, push) | P |
 | `TRIM_START`/`CANCEL`/`CLEAR` | 27/28/29 | — | per-patient DC trim (fallback) | P |
 | `SWEEP_START`/`CANCEL` | 30/31 | — | patient passive-load characterization sweep | P |
-| `TARE` | 32 | — | re-zero the FUTEK load cells (via coproc) | D |
+| `TARE` | 32 | — | re-zero the load cell load cells (via coproc) | D |
 | `LOAD_COEFFS` | 33 | `JointCoeffs` (36 B) | **download a fitted model to the device** | D |
 | `FULL_CAL` | 34 | — | ODrive `FULL_CALIBRATION_SEQUENCE` on enabled axes (**disarmed/idle only**; calibrates in RAM — `save_configuration` in odrivetool to persist) | D |
 
@@ -175,7 +175,7 @@ f32 residStdA, f32 calCps, f32 calAmp`.
 | 36 | f32×4 | `pos` | measured position **[motor turns]** |
 | 52 | f32×4 | `vel` | velocity [turns/s] |
 | 68 | f32×4 | `cmdTorque` | commanded torque [Nm] (torque mode; 0 in pos) |
-| 84 | f32×4 | `measTorque` | FUTEK joint torque [Nm] |
+| 84 | f32×4 | `measTorque` | load cell joint torque [Nm] |
 | 100 | f32×4 | `gravTerm` | gravity-comp contribution [Nm] |
 | 116 | f32×4 | `ffTerm` | feedforward/spring contribution [Nm] |
 | 132 | f32×4 | `iqMeasured` | motor q-axis current [A] |
@@ -185,7 +185,7 @@ f32 residStdA, f32 calCps, f32 calAmp`.
 | 188 | f32 | `ampR` / `ampL` (192) | trajectory amplitude |
 | 196 | u16 | `ctrlLoopUs` | control-loop exec time |
 | 198 | u16 | `linkCrcFails` / `linkResyncs` (200) | coproc-UART diagnostics |
-| 202 | u8 | `crossCheckFault` | bit i = iq-vs-FUTEK divergence on joint i |
+| 202 | u8 | `crossCheckFault` | bit i = iq-vs-load cell divergence on joint i |
 | 203 | u8 | `hbErrorByte` | bit i = axis i heartbeat error |
 
 **`flags` bitmap:** 0 `RUN`, 1 `ESTOP`, 2 `SENSOR_ONLINE`, 3 `FF`, 4

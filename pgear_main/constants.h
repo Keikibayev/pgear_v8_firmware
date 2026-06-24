@@ -89,7 +89,7 @@ static constexpr float ABS_VEL_LIM = 25.0f, ABS_ACC_LIM = 200.0f, ABS_CUR_LIM = 
 // territory — keep the cap x LOW (1x) for any patient.
 static constexpr float MAX_HIP_TORQUE_NM = 10.0f, MAX_KNEE_TORQUE_NM = 8.0f;
 
-// ---- FUTEK force -> joint torque (moment arm, applied on the MAIN side) -----
+// ---- load cell force -> joint torque (moment arm, applied on the MAIN side) -----
 // Coproc sends calibrated N per cell; main multiplies by the moment arm to get
 // joint torque. Order HR/KR/HL/KL. Tune to the mechanical mounting.
 static constexpr float MOMENT_ARM_M[PG_NJOINTS] = { 0.15f, 0.12f, 0.15f, 0.12f };
@@ -191,7 +191,7 @@ static constexpr float DRIVE_NM_PER_JOINT_NM = 1.0f / (GEAR_RATIO * KEF * GEAR_E
 #endif
 static constexpr float SENSOR_MAX_RATE_NM_PER_S   = 20.0f;  // glitch if exceeded
 static constexpr int   SENSOR_GLITCH_ESTOP_PER_S  = 50;     // glitches/s -> e-stop
-static constexpr float CROSSCHECK_DIVERGE_NM      = 8.0f;   // iq vs FUTEK warn
+static constexpr float CROSSCHECK_DIVERGE_NM      = 8.0f;   // iq vs load cell warn
 // Measured position beyond the envelope by this margin -> e-stop. The position
 // clamp can't catch a torque-mode runaway (we command torque, not position), so
 // this guards the no-endstop torque path.

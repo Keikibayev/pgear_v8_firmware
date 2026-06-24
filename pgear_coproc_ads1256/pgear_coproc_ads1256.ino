@@ -2,7 +2,7 @@
 // pgear_coproc_ads1256.ino  —  P.GEAR v8 torque-sensor co-processor  [Phase 3]
 // ----------------------------------------------------------------------------
 // One ESP32 + one ADS1256 (24-bit SPI ADC, PGA up to 64) channel-muxed over 4
-// FUTEK load-cell bridges, replacing the old 4xHX711 coproc. Outputs CALIBRATED
+// load cell load-cell bridges, replacing the old 4xHX711 coproc. Outputs CALIBRATED
 // NEWTONS per cell; the main board does moment-arm -> torque. Framed UART up to
 // the main ESP32-S3 (UART2 / GPIO43/44 on the main side).
 //

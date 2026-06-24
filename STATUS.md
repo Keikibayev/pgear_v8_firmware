@@ -25,7 +25,7 @@ first-light tuning. The wire protocol + the PC link were verified headless.
    walk → coproc → WiFi → AAN/torque).
 2. **pi_gui GUI rewiring** — wire the existing PySide6 GUI onto the device
    (via the bridge or `esp32_link` directly); today it still uses the old path.
-3. **Operator setup** — ODrive provisioning, FUTEK cal, `MOMENT_ARM_M`,
+3. **Operator setup** — ODrive provisioning, load cell cal, `MOMENT_ARM_M`,
    per-axis `Kt`, envelope-vs-mechanical-stops, e-stop HW cutoff (`docs/TODO.md`).
 4. Optional: enable status screen (Phase 8), bridge cosmetic strings, mock device.
 

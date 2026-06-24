@@ -137,7 +137,7 @@ struct __attribute__((packed)) LogPacket {
   float    pos[PG_NJOINTS];         // turns
   float    vel[PG_NJOINTS];         // turns/s
   float    cmdTorque[PG_NJOINTS];   // Nm (torque mode; 0 in pos mode)
-  float    measTorque[PG_NJOINTS];  // Nm (from FUTEK via coproc)
+  float    measTorque[PG_NJOINTS];  // Nm (from load cell via coproc)
   float    gravTerm[PG_NJOINTS];    // Nm (gravity-comp contribution)
   float    ffTerm[PG_NJOINTS];      // Nm (feedforward / assist-spring contribution)
   float    iqMeasured[PG_NJOINTS];  // A  (q-axis current)
@@ -215,7 +215,7 @@ enum PgOpcode : uint8_t {
   OP_CAL_START, OP_CAL_CANCEL,
   OP_TRIM_START, OP_TRIM_CANCEL, OP_TRIM_CLEAR,
   OP_SWEEP_START, OP_SWEEP_CANCEL,
-  OP_TARE,            // re-tare FUTEK cells (bumps coproc tareSeq)
+  OP_TARE,            // re-tare load cell cells (bumps coproc tareSeq)
   // calibration coefficient download (the numpy-split boundary)
   OP_LOAD_COEFFS,     // payload: JointCoeffs (see below)
   OP_FULL_CAL,        // ODrive FULL_CALIBRATION_SEQUENCE on enabled axes (IDLE only)
