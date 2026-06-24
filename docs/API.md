@@ -138,7 +138,7 @@ During Teach/Observe the device streams `CaptureRangePacket` (see §3).
 ### Torque-mode tunables (Phase 6b)
 | op | # | payload | effect | |
 |---|---|---|---|---|
-| `SET_TORQUE_ASSIST` | 35 | `f32` gain | live multiplier on the assist spring `K_assist` (the "go" / therapist assist ceiling); 1.0 = defaults, clamped [0,10] | D |
+| `SET_TORQUE_ASSIST` | 35 | `f32` gain | live multiplier on the assist spring `K_assist` (the "go" / therapist assist ceiling); 1.0 = defaults, clamped [0,30] | D |
 | `SET_FREE_RUN` | 36 | `u8` 0/1 | 1 = torque-mode phase self-advances (BENCH self-walk, cooperation gate ignored); 0 = patient-led (default) | D |
 | `SET_TORQUE_CAP` | 37 | `f32` mult | multiplier on the per-joint torque caps (`MAX_HIP/KNEE_TORQUE_NM` = 10/8 Nm); 1.0 = base, 10x = 100/80 Nm, clamped [0.1,10] | D |
 | `SET_LIMB_WEIGHT` | 38 | `f32` Nm | manual HIP limb-weight feed-forward (peak Nm at horizontal); cancels the patient leg weight w/o a passive model, clamped [0,100] | D |

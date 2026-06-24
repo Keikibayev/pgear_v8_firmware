@@ -221,7 +221,7 @@ enum PgOpcode : uint8_t {
   OP_FULL_CAL,        // ODrive FULL_CALIBRATION_SEQUENCE on enabled axes (IDLE only)
   // torque-mode tunables (Phase 6b)
   OP_SET_TORQUE_ASSIST, // float: multiplier on the assist spring K_assist (the
-                        // "go"); 1.0 = defaults, clamped [0,5]
+                        // "go"); 1.0 = defaults, clamped [0,30]
   OP_SET_FREE_RUN,    // uint8 0/1: 1 = torque-mode phase self-advances (BENCH
                       // self-walk, gate ignored); 0 = patient-led (default)
   OP_SET_TORQUE_CAP,  // float: multiplier on the per-joint torque caps
