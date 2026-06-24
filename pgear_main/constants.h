@@ -157,9 +157,9 @@ static constexpr float TQ_EFFORT_SCALE_NM       = 3.0f;   // helping torque for 
 static constexpr float TQ_DRIVE_MAX             = 1.0f;   // max cadence fraction driven when passive
 static constexpr float TQ_BDAMP_HIP_NM_S_DEG    = 0.02f;
 static constexpr float TQ_BDAMP_KNEE_NM_S_DEG   = 0.02f;
-static constexpr float TQ_ROM_MARGIN_DEG        = 4.0f;   // virtual-wall band
-static constexpr float TQ_KWALL_NM_DEG          = 0.4f;
-static constexpr float TQ_BWALL_NM_S_DEG        = 0.06f;
+static constexpr float TQ_ROM_MARGIN_DEG        = 6.0f;   // virtual-wall band (wider = earlier brake)
+static constexpr float TQ_KWALL_NM_DEG          = 2.5f;   // firm wall (was 0.4 — too weak vs high gain)
+static constexpr float TQ_BWALL_NM_S_DEG        = 0.4f;   // damping to arrest momentum near the limit
 static constexpr float TQ_GATE_MIN              = -1.0f;  // allow full reverse
 static constexpr float TQ_GATE_VREF_FLOOR_DEG_S = 2.0f;
 static constexpr float TQ_GATE_HOLD_BAND        = 0.05f;

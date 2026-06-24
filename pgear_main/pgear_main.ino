@@ -459,12 +459,16 @@ void loop() {
   CommandPacket cmd;
   while (host_link_get_command(&cmd)) dispatchCommand(cmd);
 
-  // Link-loss watchdog: GUI talked then went silent while running -> safe hold.
+  // Link-loss watchdog: GUI talked then went silent while running -> IDLE all
+  // axes (motors off, leg free). Chosen over homing because on a moving treadmill
+  // a homed/held leg fights the treadmill; a free leg moves with the patient.
+  // NOTE: idle drops all motor support (incl. gravity-comp) -> the patient must
+  // be harnessed/supported.
   if (g_running && host_link_last_rx_ms() != 0 && host_link_link_lost()) {
     static uint32_t lastWarn = 0;
     if (now - lastWarn > 2000) { lastWarn = now;
-      Serial.println("[host] link lost while running -> homing (safe hold)"); }
-    g_pendingCmd = CMD_STOP;
+      Serial.println("[host] link lost while running -> IDLE (motors off)"); }
+    g_pendingCmd = CMD_DISARM;
   }
 
   // Telemetry: broadcast LogPacket at HOST_TELEM_HZ.

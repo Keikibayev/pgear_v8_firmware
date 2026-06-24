@@ -217,6 +217,9 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
     float deg = jdeg(eng, snap->j[i], i);
     float vel = jvel(eng, snap->j[i], i);
     float ref = gait_target_deg(JOINTS[i].kind, L, st->phase01, L ? eng->amp_l : eng->amp_r);
+    // Clamp the spring target to ROM so the assist never drives the leg PAST the
+    // ROM (the soft wall alone can't hold a high-gain spring back).
+    ref = gait_clamp_to_rom(ref, eng->joints[i].rom_min_deg, eng->joints[i].rom_max_deg);
 
     float t_grav = tq_grav_nm(eng, i, deg, limb_hip_nm);
     float err = clampf(ref - deg, -TQ_ASSIST_SAT_DEG, TQ_ASSIST_SAT_DEG);
