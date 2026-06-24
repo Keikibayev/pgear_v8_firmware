@@ -246,7 +246,7 @@ static void dispatchCommand(const CommandPacket& c) {
                           if (!fr) g_torque.g_filt = 0.0f;  // re-earn cooperation on exit
                           g_freeRun = fr; } break;
     case OP_SET_TORQUE_CAP: { float m = payload_f32(c, 0);
-                          g_torqueCapMult = m < 0.1f ? 0.1f : (m > 4.0f ? 4.0f : m); } break;
+                          g_torqueCapMult = m < 0.1f ? 0.1f : (m > 10.0f ? 10.0f : m); } break;
     case OP_SET_LIMB_WEIGHT: { float w = payload_f32(c, 0);
                           g_limbWeightHipNm = w < 0.0f ? 0.0f : (w > 30.0f ? 30.0f : w); } break;
     case OP_SET_ROM:      if (c.joint < PG_NJOINTS) {
