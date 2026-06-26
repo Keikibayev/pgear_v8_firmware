@@ -66,7 +66,9 @@ volatile float   g_torqueAssistGain = 1.0f;   // [6b] live K_assist multiplier (
 volatile bool    g_freeRun         = false;   // [6b] BENCH: torque phase self-advances
 volatile bool    g_allowReverse    = true;    // [6b] patient may drive phase backward;
                                               //      false = hold+assist to finish cycle
-volatile float   g_torqueCapMult   = 1.0f;    // [6b] live multiplier on per-joint torque caps
+volatile float   g_torqueCapMult   = 15.0f;   // [6b] live multiplier on per-joint torque caps
+                                              //      (GUI fixes this at 15; knob hidden)
+volatile float   g_velLimitMult     = 1.0f;   // [6b] multiplier on per-joint velocity-limit caps
 volatile float   g_limbWeightHipNm = 0.0f;    // [6b] manual hip limb-weight feed-forward (peak Nm)
 volatile float   g_kneeAssistNm    = 0.0f;    // [6b] knee swing-assist feed-forward (Nm kick)
 volatile uint16_t g_logSeq     = 0;
@@ -249,7 +251,9 @@ static void dispatchCommand(const CommandPacket& c) {
                           if (!fr) g_torque.g_filt = 0.0f;  // re-earn cooperation on exit
                           g_freeRun = fr; } break;
     case OP_SET_TORQUE_CAP: { float m = payload_f32(c, 0);
-                          g_torqueCapMult = m < 0.1f ? 0.1f : (m > 10.0f ? 10.0f : m); } break;
+                          g_torqueCapMult = m < 0.1f ? 0.1f : (m > 20.0f ? 20.0f : m); } break;
+    case OP_SET_VEL_LIMIT: { float m = payload_f32(c, 0);
+                          g_velLimitMult = m < 0.2f ? 0.2f : (m > 3.0f ? 3.0f : m); } break;
     case OP_SET_LIMB_WEIGHT: { float w = payload_f32(c, 0);
                           g_limbWeightHipNm = w < 0.0f ? 0.0f : (w > 100.0f ? 100.0f : w); } break;
     case OP_SET_KNEE_ASSIST: { float w = payload_f32(c, 0);
@@ -340,7 +344,7 @@ static void controlTask(void *arg) {
         if (g_armed) {
           float mnm[PG_NJOINTS]; bool has[PG_NJOINTS];
           control_torque_step(GAIT_DT_S, g_running, g_freeRun, g_allowReverse, g_aanEnabled,
-                              g_torqueAssistGain, g_torqueCapMult, g_limbWeightHipNm,
+                              g_torqueAssistGain, g_torqueCapMult, g_velLimitMult, g_limbWeightHipNm,
                               g_kneeAssistNm, g_engine.cps, &snap, &cd, &g_patient,
                               &g_engine, &g_torque, mnm, has);
           for (int i = 0; i < PG_NJOINTS; i++)

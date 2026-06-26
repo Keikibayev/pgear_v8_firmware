@@ -55,7 +55,8 @@ struct TorqueState {
 // swing direction; no knee gravity model needed).
 void control_torque_step(float dt_s, bool started, bool free_run, bool allow_reverse,
                          bool aan_on,
-                         float assist_gain, float cap_mult, float limb_hip_nm,
+                         float assist_gain, float cap_mult, float vel_limit_mult,
+                         float limb_hip_nm,
                          float knee_assist_nm, float cps_base,
                          const BusTelemetry* snap, const CoprocData* cd,
                          const PatientTorque* pt, const GaitEngine* eng,

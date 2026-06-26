@@ -232,6 +232,8 @@ enum PgOpcode : uint8_t {
                       // in the gait swing direction (no knee gravity model needed)
   OP_SET_ALLOW_REVERSE, // uint8 0/1: 1 = patient may drive the gait phase backward
                         // (default); 0 = never reverse — hold+assist to FINISH the cycle
+  OP_SET_VEL_LIMIT,     // float: multiplier on the per-joint velocity-limit caps
+                        // (TQ_VEL_LIMIT_HIP/KNEE); 1.0 = defaults, clamped [0.2,3.0]
 };
 
 enum PgControlMode : uint8_t { MODE_POSITION = 0, MODE_TORQUE = 1 };

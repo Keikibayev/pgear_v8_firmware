@@ -124,7 +124,8 @@ static float tq_rom_nm(const GaitEngine* eng, int i, float deg, float vel) {
 
 void control_torque_step(float dt_s, bool started, bool free_run, bool allow_reverse,
                          bool aan_on,
-                         float assist_gain, float cap_mult, float limb_hip_nm,
+                         float assist_gain, float cap_mult, float vel_limit_mult,
+                         float limb_hip_nm,
                          float knee_assist_nm, float cps_base,
                          const BusTelemetry* snap, const CoprocData* cd,
                          const PatientTorque* pt, const GaitEngine* eng,
@@ -242,8 +243,8 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool allow_rev
     float t_rom = tq_rom_nm(eng, i, deg, vel);
     // Velocity-limit brake: oppose motion above the per-joint speed cap so a weak
     // leg can't be run away by the exo at high assist/cap (knee cap is lower).
-    float vlim = (JOINTS[i].kind == KIND_HIP) ? TQ_VEL_LIMIT_HIP_DEG_S
-                                              : TQ_VEL_LIMIT_KNEE_DEG_S;
+    float vlim = ((JOINTS[i].kind == KIND_HIP) ? TQ_VEL_LIMIT_HIP_DEG_S
+                                               : TQ_VEL_LIMIT_KNEE_DEG_S) * vel_limit_mult;
     float av = fabsf(vel);
     float t_vbrake = (av > vlim) ? -TQ_VEL_BRAKE_NM_S_DEG * (av - vlim) * signf(vel)
                                  : 0.0f;
