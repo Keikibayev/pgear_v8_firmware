@@ -193,8 +193,15 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
   // a deviation. As the patient contributes, effort_need falls and they lead.
   if (started) {
     float g = st->g_filt;
+    // Reversal must be EARNED: sustained backward cooperation AND a genuine
+    // position lag (st->mean_lag_deg, from last tick) — not a momentary velocity
+    // blip. Otherwise HOLD (0). Stops the direction chatter that kept the cycle
+    // from finishing.
+    bool rev_cond = (g < TQ_PHASE_REVERSE_G) && (st->mean_lag_deg > TQ_REVERSE_LAG_DEG);
+    st->rev_timer = rev_cond ? (st->rev_timer + dt_s) : 0.0f;
+    bool reversing = (st->rev_timer >= TQ_REVERSE_DWELL_S);
     float gate_phase = free_run ? 1.0f
-                  : ((g > TQ_GATE_HOLD_BAND) ? g : (g < TQ_REVERSE_ENABLE ? g : 0.0f));
+                  : ((g > TQ_GATE_HOLD_BAND) ? g : (reversing ? g : 0.0f));
     float drive = (aan_on && !free_run) ? (effort_need * coop * TQ_DRIVE_MAX) : 0.0f;
     // Drive only ADDS forward motion; never override a reversal (negative gate).
     float g_phase = gate_phase;
@@ -249,11 +256,15 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
     out_has[i] = true;
   }
 
+  // Mean tracking lag (position error) — stored for next tick's reversal gate
+  // and reused by the AAN update below.
+  st->mean_lag_deg = (lag_n > 0) ? (lag_sum / (float)lag_n) : 0.0f;
+
   // Adaptive assist-as-needed (with forgetting): grow `adapt` when the leg lags
   // the gait pattern, fade it when the patient keeps up. When AAN is off, hold
   // at 1.0 so the therapist's gain is used directly.
   if (aan_on && started) {
-    float lag = (lag_n > 0) ? (lag_sum / (float)lag_n) : 0.0f;
+    float lag = st->mean_lag_deg;
     float e_norm = clampf(lag / TQ_ADAPT_ERR_SCALE_DEG, 0.0f, 1.0f);
     // Need = the greater of "lagging the pattern" (error-based) and "not
     // contributing" (effort-based). coop (above) suppresses growth during a

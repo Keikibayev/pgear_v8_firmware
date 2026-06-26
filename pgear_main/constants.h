@@ -155,7 +155,9 @@ static constexpr float TQ_PATIENT_ASSIST_FRAC   = 0.5f;   // alpha: fraction of 
 static constexpr float TQ_K_HIP_FALLBACK_NM     = 2.0f;   // grav gain w/o a model
 static constexpr float TQ_K_KNEE_FALLBACK_NM    = 0.5f;
 static constexpr float TQ_KASSIST_HIP_NM_DEG    = 0.08f;  // soft tracking spring
-static constexpr float TQ_KASSIST_KNEE_NM_DEG   = 0.05f;
+static constexpr float TQ_KASSIST_KNEE_NM_DEG   = 0.03f;  // knee swings a bigger arc w/
+                                                          // ~no gravity -> was too strong
+                                                          // vs the hip at high assist (TUNE)
 static constexpr float TQ_ASSIST_SAT_DEG        = 12.0f;
 // Adaptive assist-as-needed (torque mode, when AAN is on): the assist spring is
 // scaled by an "adapt" factor in [FLOOR,1] that GROWS when the leg lags the gait
@@ -179,7 +181,15 @@ static constexpr float TQ_BWALL_NM_S_DEG        = 0.4f;   // damping to arrest m
 static constexpr float TQ_GATE_MIN              = -1.0f;  // allow full reverse
 static constexpr float TQ_GATE_VREF_FLOOR_DEG_S = 2.0f;
 static constexpr float TQ_GATE_HOLD_BAND        = 0.05f;
-static constexpr float TQ_REVERSE_ENABLE        = -0.15f;
+static constexpr float TQ_REVERSE_ENABLE        = -0.15f;  // coop-factor scaling only
+// Phase REVERSAL hardening: the phase used to flip backward the instant the
+// velocity gate dipped below TQ_REVERSE_ENABLE, so a momentary backward blip
+// reversed direction and the gait never finished a cycle. Reversal now must be
+// EARNED — the gate below TQ_PHASE_REVERSE_G *and* a real position lag held for
+// TQ_REVERSE_DWELL_S — else the phase HOLDS instead of reversing.
+static constexpr float TQ_PHASE_REVERSE_G  = -0.35f;  // gate must be this low to reverse
+static constexpr float TQ_REVERSE_LAG_DEG  = 5.0f;    // AND leg this far off-reference
+static constexpr float TQ_REVERSE_DWELL_S  = 0.25f;   // AND sustained this long
 static constexpr float TQ_TAU_RATE_NM_S         = 40.0f;  // joint torque slew
 // joint torque [Nm] -> ODrive motor input_torque [Nm] (inverse of the gear path)
 static constexpr float DRIVE_NM_PER_JOINT_NM = 1.0f / (GEAR_RATIO * KEF * GEAR_EFFICIENCY);

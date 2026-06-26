@@ -40,6 +40,8 @@ struct TorqueState {
   float g_filt  = 1.0f;
   float adapt   = 1.0f;   // adaptive-assist factor [FLOOR,1] (AAN); 1 = full gain
   float prev_tau[PG_NJOINTS] = {0};
+  float rev_timer    = 0.0f;  // how long the reverse condition has held [s]
+  float mean_lag_deg = 0.0f;  // last tick's mean |ref-pos| tracking lag (position error)
 };
 // `aan_on` enables adaptive assist-as-needed. `st->adapt` (which scales the
 // therapist gain ceiling) grows on the GREATER of gait-tracking lag (error) and
