@@ -44,9 +44,8 @@ bool safety_estop_pressed() {
 
 float safety_clamp_turns(int idx, float turns) {
   if (idx < 0 || idx >= PG_NJOINTS) return turns;
-  bool hip = (JOINTS[idx].kind == KIND_HIP);
-  float lo = hip ? HIP_TURN_MIN : KNEE_TURN_MIN;
-  float hi = hip ? HIP_TURN_MAX : KNEE_TURN_MAX;
+  float lo, hi;
+  joint_turn_limits(idx, &lo, &hi);   // direction-aware (mirrors for R-leg)
   if (turns < lo) return lo;
   if (turns > hi) return hi;
   return turns;
@@ -67,9 +66,10 @@ bool safety_tick(bool armed, bool running,
   if (armed && snap) {
     for (int i = 0; i < PG_NJOINTS; i++) {
       if (!snap->j[i].fb_valid) { hbErr |= (1 << i); trip = true; }
-      bool hip = (JOINTS[i].kind == KIND_HIP);
-      float lo = (hip ? HIP_TURN_MIN : KNEE_TURN_MIN) - ENV_OVERRUN_MARGIN_TURNS;
-      float hi = (hip ? HIP_TURN_MAX : KNEE_TURN_MAX) + ENV_OVERRUN_MARGIN_TURNS;
+      float lo, hi;
+      joint_turn_limits(i, &lo, &hi);   // direction-aware (mirrors for R-leg)
+      lo -= ENV_OVERRUN_MARGIN_TURNS;
+      hi += ENV_OVERRUN_MARGIN_TURNS;
       if (snap->j[i].fb_valid &&
           (snap->j[i].pos_turns < lo || snap->j[i].pos_turns > hi)) trip = true;
     }

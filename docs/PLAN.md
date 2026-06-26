@@ -77,7 +77,10 @@ smoothly with no jerk at the GAIT→HOMING transition.
 ## NO ODrive endstops (2026-06-20)
 This build has **no physical endstops**. The firmware **motor-turn envelope
 clamp** (`safety_clamp_turns`) is the ONLY hard ROM limit — every commanded
-position is clamped to HIP −6..+8 / KNEE −2..+10 turns before TX. The E-STOP is
+position is clamped before TX. Limits are **direction-aware** (`joint_turn_limits`):
++dir (left-leg) HIP −6..+8 / KNEE −2..+10 turns, and the mirror-mounted right leg
+(dir −1) gets the **mirrored** HIP −8..+6 / KNEE −10..+2 so flexion has the large
+range on both legs (a global [−2,+10] caps the right knee at ~7.5°). The E-STOP is
 a hardware button (GPIO sense + a HW motor-power cutoff independent of the MCU).
 Verify the envelope matches the mechanical stops before any patient session.
 

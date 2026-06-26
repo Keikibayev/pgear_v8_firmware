@@ -81,8 +81,24 @@ static inline int joint_for_node(uint8_t node_id) {
 }
 
 // ---- Safety envelopes (motor turns) ----------------------------------------
+// These are the motor-frame limits for a +direction (left-leg) joint: small
+// extension room (negative), large flexion room (positive). The legs are
+// mirror-mounted (R-leg dir = -1), so on the right leg flexion is -turns and
+// the limits MUST mirror to [-MAX, -MIN] — e.g. the knee is [-2,+10] on the
+// left but [-10,+2] on the right. Applying the raw [-2,+10] to the right knee
+// strangles its flexion to ~7.5 deg. Always go through joint_turn_limits().
 static constexpr float HIP_TURN_MIN = -6.0f, HIP_TURN_MAX = 8.0f;
 static constexpr float KNEE_TURN_MIN = -2.0f, KNEE_TURN_MAX = 10.0f;
+
+// Per-joint motor-turn safety envelope, DIRECTION-AWARE (see note above).
+// Keyed to default_dir = the physical mounting of each leg's actuator.
+static inline void joint_turn_limits(int idx, float* lo, float* hi) {
+  bool hip = (JOINTS[idx].kind == KIND_HIP);
+  float base_lo = hip ? HIP_TURN_MIN : KNEE_TURN_MIN;
+  float base_hi = hip ? HIP_TURN_MAX : KNEE_TURN_MAX;
+  if (JOINTS[idx].default_dir >= 0) { *lo = base_lo;  *hi = base_hi;  }
+  else                              { *lo = -base_hi; *hi = -base_lo; }
+}
 static constexpr float ABS_VEL_LIM = 25.0f, ABS_ACC_LIM = 200.0f, ABS_CUR_LIM = 20.0f;
 // Base per-joint torque caps. The GUI "Torque cap x" (up to 10x) scales these,
 // so 10x = 100 Nm hip / 80 Nm knee. WARNING: 100 Nm at the hip is bench-lifting

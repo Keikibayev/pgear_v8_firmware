@@ -112,8 +112,12 @@ Telemetry = UDP; commands = reliable channel; link-loss watchdog on the ESP32.
 ## 6. Safety wiring (Phase 5)
 
 **No physical endstops in this setup.** The firmware **motor-turn envelope
-clamp** (`safety_clamp_turns`, HIP −6..+8 / KNEE −2..+10 turns) is therefore the
-**only** hard ROM limit — every commanded position is clamped to it before TX.
+clamp** (`safety_clamp_turns`) is therefore the **only** hard ROM limit — every
+commanded position is clamped to it before TX. The envelope is **direction-aware**
+(`joint_turn_limits`): the base values are the +dir (left-leg) motor frame
+(HIP −6..+8 / KNEE −2..+10 turns), and the right-leg joints (dir −1, mirror-mounted)
+get the **mirrored** range (HIP −8..+6 / KNEE −10..+2) so flexion has the large
+range on BOTH legs. A single global [−2,+10] strangled the right knee to ~7.5°.
 
 - **E-STOP button (NC):**
   1. → a Main ESP32 GPIO to GND (`ESTOP_GPIO`, default 6 — **verify a free

@@ -53,8 +53,11 @@ Code-side phase status lives in `PLAN.md`.
       promote `JOINT_NM_PER_A` to per-joint. (Torque mode / AAN depend on it.)
 - [ ] Tighten **KR / HL / KL joint screws** (were loose) before trusting their
       calibration fits.
-- [ ] **No endstops:** verify the motor-turn envelope (HIP −6..+8, KNEE −2..+10)
-      matches the mechanical hard stops — it is now the ONLY hard ROM limit.
+- [ ] **No endstops:** verify the motor-turn envelope matches the mechanical hard
+      stops on EACH leg — it is now the ONLY hard ROM limit. It is direction-aware
+      (`joint_turn_limits`): left leg HIP −6..+8 / KNEE −2..+10, right leg mirrored
+      HIP −8..+6 / KNEE −10..+2. Drive each knee to full flexion and confirm both
+      reach the same joint-angle limit (the old global [−2,+10] capped KR at ~7.5°).
 
 ## Safety wiring (do not skip)
 - [ ] E-STOP button → ESP32 GPIO **and** a hardware motor-power cutoff
