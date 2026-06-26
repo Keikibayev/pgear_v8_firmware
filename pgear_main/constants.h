@@ -178,6 +178,13 @@ static constexpr float TQ_BDAMP_KNEE_NM_S_DEG   = 0.02f;
 static constexpr float TQ_ROM_MARGIN_DEG        = 6.0f;   // virtual-wall band (wider = earlier brake)
 static constexpr float TQ_KWALL_NM_DEG          = 2.5f;   // firm wall (was 0.4 — too weak vs high gain)
 static constexpr float TQ_BWALL_NM_S_DEG        = 0.4f;   // damping to arrest momentum near the limit
+// Velocity limit (torque mode): a progressive brake torque that opposes motion
+// ABOVE a per-joint speed cap, so a weak patient can't be run away by the exo at
+// high assist/cap. The KNEE cap is lower — it swings fast with little gravity to
+// resist it. Engages only over the cap; the result is bounded by the torque cap.
+static constexpr float TQ_VEL_LIMIT_HIP_DEG_S   = 100.0f; // hip joint-speed cap (TUNE)
+static constexpr float TQ_VEL_LIMIT_KNEE_DEG_S  = 70.0f;  // knee cap, lower (TUNE)
+static constexpr float TQ_VEL_BRAKE_NM_S_DEG    = 0.5f;   // brake Nm per deg/s of overspeed (TUNE)
 static constexpr float TQ_GATE_MIN              = -1.0f;  // allow full reverse
 static constexpr float TQ_GATE_VREF_FLOOR_DEG_S = 2.0f;
 static constexpr float TQ_GATE_HOLD_BAND        = 0.05f;

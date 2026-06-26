@@ -240,8 +240,15 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool allow_rev
     float bD = (JOINTS[i].kind == KIND_HIP) ? TQ_BDAMP_HIP_NM_S_DEG : TQ_BDAMP_KNEE_NM_S_DEG;
     float t_damp = -bD * vel;
     float t_rom = tq_rom_nm(eng, i, deg, vel);
+    // Velocity-limit brake: oppose motion above the per-joint speed cap so a weak
+    // leg can't be run away by the exo at high assist/cap (knee cap is lower).
+    float vlim = (JOINTS[i].kind == KIND_HIP) ? TQ_VEL_LIMIT_HIP_DEG_S
+                                              : TQ_VEL_LIMIT_KNEE_DEG_S;
+    float av = fabsf(vel);
+    float t_vbrake = (av > vlim) ? -TQ_VEL_BRAKE_NM_S_DEG * (av - vlim) * signf(vel)
+                                 : 0.0f;
 
-    float tau = t_grav + t_assist + t_damp + t_rom;
+    float tau = t_grav + t_assist + t_damp + t_rom + t_vbrake;
     // Knee swing-assist feed-forward: a constant kick in the direction the gait
     // is currently swinging the knee (no knee gravity model needed).
     if (JOINTS[i].kind == KIND_KNEE && knee_assist_nm != 0.0f) {
