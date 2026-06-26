@@ -53,7 +53,8 @@ struct TorqueState {
 // for patients who can't be characterized. Cancels the constant limb weight.
 // `knee_assist_nm` = knee swing-assist feed-forward (constant Nm kick in the gait
 // swing direction; no knee gravity model needed).
-void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
+void control_torque_step(float dt_s, bool started, bool free_run, bool allow_reverse,
+                         bool aan_on,
                          float assist_gain, float cap_mult, float limb_hip_nm,
                          float knee_assist_nm, float cps_base,
                          const BusTelemetry* snap, const CoprocData* cd,

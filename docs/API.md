@@ -143,6 +143,7 @@ During Teach/Observe the device streams `CaptureRangePacket` (see §3).
 | `SET_TORQUE_CAP` | 37 | `f32` mult | multiplier on the per-joint torque caps (`MAX_HIP/KNEE_TORQUE_NM` = 10/8 Nm); 1.0 = base, 10x = 100/80 Nm, clamped [0.1,10] | D |
 | `SET_LIMB_WEIGHT` | 38 | `f32` Nm | manual HIP limb-weight feed-forward (peak Nm at horizontal); cancels the patient leg weight w/o a passive model, clamped [0,100] | D |
 | `SET_KNEE_ASSIST` | 39 | `f32` Nm | KNEE swing-assist feed-forward; constant kick in the gait swing direction (no knee gravity model), clamped [-15,15] | D |
+| `SET_ALLOW_REVERSE` | 40 | `u8` 0/1 | torque mode: 1 = patient may drive the gait phase backward (default); 0 = never reverse — hold+assist to finish the cycle | D |
 
 > Torque-mode telemetry already exposes the breakdown these knobs affect:
 > `cmdTorque` / `gravTerm` / `ffTerm` per joint (see §3). `ffTerm` is the

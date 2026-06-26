@@ -230,6 +230,8 @@ enum PgOpcode : uint8_t {
                       // horizontal (cancels patient leg weight w/o a passive model)
   OP_SET_KNEE_ASSIST, // float: KNEE swing-assist feed-forward [Nm], constant kick
                       // in the gait swing direction (no knee gravity model needed)
+  OP_SET_ALLOW_REVERSE, // uint8 0/1: 1 = patient may drive the gait phase backward
+                        // (default); 0 = never reverse — hold+assist to FINISH the cycle
 };
 
 enum PgControlMode : uint8_t { MODE_POSITION = 0, MODE_TORQUE = 1 };

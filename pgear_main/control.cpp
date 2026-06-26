@@ -122,7 +122,8 @@ static float tq_rom_nm(const GaitEngine* eng, int i, float deg, float vel) {
   return 0.0f;
 }
 
-void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
+void control_torque_step(float dt_s, bool started, bool free_run, bool allow_reverse,
+                         bool aan_on,
                          float assist_gain, float cap_mult, float limb_hip_nm,
                          float knee_assist_nm, float cps_base,
                          const BusTelemetry* snap, const CoprocData* cd,
@@ -197,7 +198,10 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool aan_on,
     // position lag (st->mean_lag_deg, from last tick) — not a momentary velocity
     // blip. Otherwise HOLD (0). Stops the direction chatter that kept the cycle
     // from finishing.
-    bool rev_cond = (g < TQ_PHASE_REVERSE_G) && (st->mean_lag_deg > TQ_REVERSE_LAG_DEG);
+    // allow_reverse=false -> never reverse: the phase only holds or advances, so
+    // the gait always tries to FINISH the cycle (GUI "Allow reverse" off).
+    bool rev_cond = allow_reverse && (g < TQ_PHASE_REVERSE_G)
+                    && (st->mean_lag_deg > TQ_REVERSE_LAG_DEG);
     st->rev_timer = rev_cond ? (st->rev_timer + dt_s) : 0.0f;
     bool reversing = (st->rev_timer >= TQ_REVERSE_DWELL_S);
     float gate_phase = free_run ? 1.0f

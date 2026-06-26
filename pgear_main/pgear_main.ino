@@ -64,6 +64,8 @@ volatile bool    g_aanEnabled  = false;
 volatile float   g_assistLevel = 0.5f;
 volatile float   g_torqueAssistGain = 1.0f;   // [6b] live K_assist multiplier (the "go")
 volatile bool    g_freeRun         = false;   // [6b] BENCH: torque phase self-advances
+volatile bool    g_allowReverse    = true;    // [6b] patient may drive phase backward;
+                                              //      false = hold+assist to finish cycle
 volatile float   g_torqueCapMult   = 1.0f;    // [6b] live multiplier on per-joint torque caps
 volatile float   g_limbWeightHipNm = 0.0f;    // [6b] manual hip limb-weight feed-forward (peak Nm)
 volatile float   g_kneeAssistNm    = 0.0f;    // [6b] knee swing-assist feed-forward (Nm kick)
@@ -252,6 +254,7 @@ static void dispatchCommand(const CommandPacket& c) {
                           g_limbWeightHipNm = w < 0.0f ? 0.0f : (w > 100.0f ? 100.0f : w); } break;
     case OP_SET_KNEE_ASSIST: { float w = payload_f32(c, 0);
                           g_kneeAssistNm = w < -15.0f ? -15.0f : (w > 15.0f ? 15.0f : w); } break;
+    case OP_SET_ALLOW_REVERSE: g_allowReverse = (c.len >= 1 && c.payload[0]); break;
     case OP_SET_ROM:      if (c.joint < PG_NJOINTS) {
                             g_engine.joints[c.joint].rom_min_deg = payload_f32(c, 0);
                             g_engine.joints[c.joint].rom_max_deg = payload_f32(c, 4);
@@ -336,7 +339,7 @@ static void controlTask(void *arg) {
         // running; walks when running). No homing — STOP just stops the phase.
         if (g_armed) {
           float mnm[PG_NJOINTS]; bool has[PG_NJOINTS];
-          control_torque_step(GAIT_DT_S, g_running, g_freeRun, g_aanEnabled,
+          control_torque_step(GAIT_DT_S, g_running, g_freeRun, g_allowReverse, g_aanEnabled,
                               g_torqueAssistGain, g_torqueCapMult, g_limbWeightHipNm,
                               g_kneeAssistNm, g_engine.cps, &snap, &cd, &g_patient,
                               &g_engine, &g_torque, mnm, has);
