@@ -126,7 +126,7 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool allow_rev
                          bool aan_on,
                          float assist_gain, float cap_mult, float vel_limit_mult,
                          float limb_hip_nm,
-                         float knee_assist_nm, float knee_weight_nm, float cps_base,
+                         float knee_assist_nm, float cps_base,
                          const BusTelemetry* snap, const CoprocData* cd,
                          const PatientTorque* pt, const GaitEngine* eng,
                          TorqueState* st,
@@ -221,11 +221,6 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool allow_rev
   // tick's mean tracking lag.
   float eff_gain = assist_gain * st->adapt;
 
-  // Precompute every joint's joint-frame angle so a knee can read its same-leg
-  // hip angle for the 2-link gravity term below.
-  float jdeg_all[PG_NJOINTS];
-  for (int i = 0; i < PG_NJOINTS; i++) jdeg_all[i] = jdeg(eng, snap->j[i], i);
-
   // per-joint torque law (accumulate the gait-tracking lag for the AAN update)
   float lag_sum = 0.0f; int lag_n = 0;
   for (int i = 0; i < PG_NJOINTS; i++) {
@@ -239,14 +234,6 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool allow_rev
     ref = gait_clamp_to_rom(ref, eng->joints[i].rom_min_deg, eng->joints[i].rom_max_deg);
 
     float t_grav = tq_grav_nm(eng, i, deg, limb_hip_nm);
-    // Knee 2-link gravity (manual): the shank's angle from vertical depends on the
-    // HIP, not the knee alone, so sin(knee) is wrong. tau = K*sin(hip_deg-knee_deg).
-    // Therapist dials knee_weight_nm until the knee floats neutral (sign-tunable).
-    if (JOINTS[i].kind == KIND_KNEE && knee_weight_nm != 0.0f) {
-      float hip_deg = jdeg_all[i - 1];   // same-leg hip (KR<-HR, KL<-HL)
-      t_grav += eng->joints[i].direction * knee_weight_nm
-              * sinf((hip_deg - deg) * (float)M_PI / 180.0f);
-    }
     float err = clampf(ref - deg, -TQ_ASSIST_SAT_DEG, TQ_ASSIST_SAT_DEG);
     lag_sum += fabsf(err); lag_n++;
     float kA = (JOINTS[i].kind == KIND_HIP) ? TQ_KASSIST_HIP_NM_DEG : TQ_KASSIST_KNEE_NM_DEG;

@@ -234,8 +234,6 @@ enum PgOpcode : uint8_t {
                         // (default); 0 = never reverse — hold+assist to FINISH the cycle
   OP_SET_VEL_LIMIT,     // float: multiplier on the per-joint velocity-limit caps
                         // (TQ_VEL_LIMIT_HIP/KNEE); 1.0 = defaults, clamped [0.2,3.0]
-  OP_SET_KNEE_WEIGHT,   // float Nm: manual KNEE gravity feed-forward (2-link), peak
-                        // Nm; K*sin(hip_deg-knee_deg). Sign-tunable, clamped [-50,50]
 };
 
 enum PgControlMode : uint8_t { MODE_POSITION = 0, MODE_TORQUE = 1 };
