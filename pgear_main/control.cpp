@@ -243,8 +243,12 @@ void control_torque_step(float dt_s, bool started, bool free_run, bool allow_rev
     float t_rom = tq_rom_nm(eng, i, deg, vel);
     // Velocity-limit brake: oppose motion above the per-joint speed cap so a weak
     // leg can't be run away by the exo at high assist/cap (knee cap is lower).
-    float vlim = ((JOINTS[i].kind == KIND_HIP) ? TQ_VEL_LIMIT_HIP_DEG_S
-                                               : TQ_VEL_LIMIT_KNEE_DEG_S) * vel_limit_mult;
+    // Knee extension (straightening, vel<0) is gravity-aided -> cap it tighter than
+    // flexion so the fast "fall" home is braked without making the bend hard.
+    float vlim;
+    if (JOINTS[i].kind == KIND_HIP) vlim = TQ_VEL_LIMIT_HIP_DEG_S;
+    else vlim = (vel < 0.0f) ? TQ_VEL_LIMIT_KNEE_EXT_DEG_S : TQ_VEL_LIMIT_KNEE_DEG_S;
+    vlim *= vel_limit_mult;
     float av = fabsf(vel);
     float t_vbrake = (av > vlim) ? -TQ_VEL_BRAKE_NM_S_DEG * (av - vlim) * signf(vel)
                                  : 0.0f;

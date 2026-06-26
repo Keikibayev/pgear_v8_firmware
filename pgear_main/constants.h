@@ -182,9 +182,13 @@ static constexpr float TQ_BWALL_NM_S_DEG        = 0.4f;   // damping to arrest m
 // ABOVE a per-joint speed cap, so a weak patient can't be run away by the exo at
 // high assist/cap. The KNEE cap is lower — it swings fast with little gravity to
 // resist it. Engages only over the cap; the result is bounded by the torque cap.
-static constexpr float TQ_VEL_LIMIT_HIP_DEG_S   = 100.0f; // hip joint-speed cap (TUNE)
-static constexpr float TQ_VEL_LIMIT_KNEE_DEG_S  = 70.0f;  // knee cap, lower (TUNE)
-static constexpr float TQ_VEL_BRAKE_NM_S_DEG    = 0.5f;   // brake Nm per deg/s of overspeed (TUNE)
+static constexpr float TQ_VEL_LIMIT_HIP_DEG_S      = 100.0f; // hip joint-speed cap (TUNE)
+static constexpr float TQ_VEL_LIMIT_KNEE_DEG_S     = 70.0f;  // knee FLEXION cap (bend; keep loose) (TUNE)
+// Knee EXTENSION (straightening toward home, vel<0) is gravity-aided + assist, so it
+// runs away ("falls"). Cap it tighter than flexion so taming the fast return doesn't
+// make the bend hard for a weak patient. Real fix is a knee gravity model (TODO). (TUNE)
+static constexpr float TQ_VEL_LIMIT_KNEE_EXT_DEG_S = 40.0f;
+static constexpr float TQ_VEL_BRAKE_NM_S_DEG       = 0.5f;   // brake Nm per deg/s of overspeed (TUNE)
 static constexpr float TQ_GATE_MIN              = -1.0f;  // allow full reverse
 static constexpr float TQ_GATE_VREF_FLOOR_DEG_S = 2.0f;
 static constexpr float TQ_GATE_HOLD_BAND        = 0.05f;
